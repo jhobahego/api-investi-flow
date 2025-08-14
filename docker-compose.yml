@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # API Backend
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=development
+      - DEBUG=True
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Redis para Celery (caché y colas)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"  # Cambiado de 6379 a 6380 para evitar conflicto
+    volumes:
+      - redis_data:/data
+
+  # Worker de Celery (para tareas asíncronas)
+  celery_worker:
+    build: .
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0  # Interno en Docker, no el puerto externo
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    command: celery -A app.core.celery worker --loglevel=info
+
+volumes:
+  redis_data:
