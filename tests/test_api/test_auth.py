@@ -261,3 +261,172 @@ class TestUserRegistration:
             },
         )
         assert response3.status_code == 422
+
+
+class TestUserLogin:
+    """Pruebas para los endpoints de login y logout"""
+
+    def test_login_user_success(self) -> None:
+        """Probar login exitoso de usuario"""
+        # Crear un usuario primero
+        user_data = {
+            "email": "login@example.com",
+            "full_name": "Login User",
+            "password": "Test123456",
+            "phone_number": "+573001234567",
+        }
+
+        register_response = client.post("/api/v1/auth/register", json=user_data)
+        assert register_response.status_code == 201
+
+        # Intentar login
+        login_data = {"email": "login@example.com", "password": "Test123456"}
+
+        response = client.post("/api/v1/auth/login", json=login_data)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert data["token_type"] == "bearer"
+        assert isinstance(data["access_token"], str)
+        assert len(data["access_token"]) > 20  # JWT debería ser más largo
+
+    def test_login_user_invalid_credentials(self) -> None:
+        """Probar login con credenciales inválidas"""
+        # Crear un usuario primero
+        user_data = {
+            "email": "login2@example.com",
+            "full_name": "Login User 2",
+            "password": "Test123456",
+            "phone_number": "+573001234568",
+        }
+
+        register_response = client.post("/api/v1/auth/register", json=user_data)
+        assert register_response.status_code == 201
+
+        # Intentar login con contraseña incorrecta
+        login_data = {"email": "login2@example.com", "password": "WrongPassword123"}
+
+        response = client.post("/api/v1/auth/login", json=login_data)
+
+        assert response.status_code == 401
+        assert "Email o contraseña incorrectos" in response.json()["detail"]
+
+    def test_login_user_nonexistent(self) -> None:
+        """Probar login con usuario que no existe"""
+        login_data = {"email": "nonexistent@example.com", "password": "Test123456"}
+
+        response = client.post("/api/v1/auth/login", json=login_data)
+
+        assert response.status_code == 401
+        assert "Email o contraseña incorrectos" in response.json()["detail"]
+
+    def test_login_missing_fields(self) -> None:
+        """Probar login con campos faltantes"""
+        # Sin email
+        response1 = client.post("/api/v1/auth/login", json={"password": "Test123456"})
+        assert response1.status_code == 422
+
+        # Sin contraseña
+        response2 = client.post(
+            "/api/v1/auth/login", json={"email": "test@example.com"}
+        )
+        assert response2.status_code == 422
+
+    def test_logout_user_success(self) -> None:
+        """Probar logout exitoso con token válido"""
+        # Crear un usuario y hacer login
+        user_data = {
+            "email": "logout@example.com",
+            "full_name": "Logout User",
+            "password": "Test123456",
+            "phone_number": "+573001234569",
+        }
+
+        register_response = client.post("/api/v1/auth/register", json=user_data)
+        assert register_response.status_code == 201
+
+        login_data = {"email": "logout@example.com", "password": "Test123456"}
+
+        login_response = client.post("/api/v1/auth/login", json=login_data)
+        assert login_response.status_code == 200
+        token = login_response.json()["access_token"]
+
+        # Hacer logout
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.post("/api/v1/auth/logout", headers=headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "logout@example.com" in data["message"]
+
+    def test_logout_user_invalid_token(self) -> None:
+        """Probar logout con token inválido"""
+        headers = {"Authorization": "Bearer invalid_token"}
+        response = client.post("/api/v1/auth/logout", headers=headers)
+
+        assert response.status_code == 401
+
+    def test_logout_user_no_token(self) -> None:
+        """Probar logout sin token"""
+        response = client.post("/api/v1/auth/logout")
+
+        assert (
+            response.status_code == 403
+        )  # FastAPI HTTPBearer retorna 403 sin authorization header
+
+
+class TestProtectedEndpoints:
+    """Pruebas para endpoints protegidos que requieren autenticación"""
+
+    def test_get_current_user_profile_success(self) -> None:
+        """Probar acceso exitoso al perfil de usuario autenticado"""
+        # Crear un usuario y hacer login
+        user_data = {
+            "email": "profile@example.com",
+            "full_name": "Profile User",
+            "password": "Test123456",
+            "phone_number": "+573001234570",
+            "university": "Universidad Test",
+            "research_group": "Grupo Test",
+            "career": "Carrera Test",
+        }
+
+        register_response = client.post("/api/v1/auth/register", json=user_data)
+        assert register_response.status_code == 201
+
+        login_data = {"email": "profile@example.com", "password": "Test123456"}
+
+        login_response = client.post("/api/v1/auth/login", json=login_data)
+        assert login_response.status_code == 200
+        token = login_response.json()["access_token"]
+
+        # Acceder al perfil con token válido
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.get("/api/v1/users/me", headers=headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == user_data["email"]
+        assert data["full_name"] == user_data["full_name"]
+        assert data["university"] == user_data["university"]
+        assert data["research_group"] == user_data["research_group"]
+        assert data["career"] == user_data["career"]
+        # Verificar que la contraseña no se retorna
+        assert "password" not in data
+        assert "hashed_password" not in data
+
+    def test_get_current_user_profile_no_token(self) -> None:
+        """Probar acceso al perfil sin token"""
+        response = client.get("/api/v1/users/me")
+
+        assert (
+            response.status_code == 403
+        )  # FastAPI HTTPBearer retorna 403 sin authorization header
+
+    def test_get_current_user_profile_invalid_token(self) -> None:
+        """Probar acceso al perfil con token inválido"""
+        headers = {"Authorization": "Bearer invalid_token"}
+        response = client.get("/api/v1/users/me", headers=headers)
+
+        assert response.status_code == 401
