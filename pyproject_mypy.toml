@@ -1,0 +1,21 @@
+# Configuración específica para el proyecto
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+# Ignorar archivos de migración
+[[tool.mypy.overrides]]
+module = [
+    "alembic.*",
+    "alembic.versions.*"
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "passlib.*",
+    "jose.*"
+]
+ignore_missing_imports = true

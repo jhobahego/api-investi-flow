@@ -3,6 +3,7 @@ from typing import Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.api_v1.api import api_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -31,5 +32,4 @@ async def health_check() -> Dict[str, str]:
 
 
 # Incluir routers cuando estén creados
-# from app.api.api_v1.api import api_router
-# app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(api_router, prefix=settings.API_V1_STR)
