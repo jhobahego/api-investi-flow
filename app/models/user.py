@@ -12,6 +12,16 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
+
+    # Nuevos campos de perfil
+    phone_number = Column(
+        String, nullable=True
+    )  # Temporal: nullable para compatibilidad
+    university = Column(String, nullable=True)
+    research_group = Column(String, nullable=True)
+    career = Column(String, nullable=True)
+
+    # Campos existentes
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -20,6 +20,10 @@ def register_user(
     - **email**: Email válido del usuario (único en el sistema)
     - **full_name**: Nombre completo del usuario
     - **password**: Contraseña segura (mínimo 8 caracteres, una mayúscula, una minúscula, un número)
+    - **phone_number**: Número de teléfono colombiano (ej: +573001234567 para móvil, +5714567890 para fijo)
+    - **university**: Nombre de la universidad (opcional)
+    - **research_group**: Semillero de investigación (opcional)
+    - **career**: Carrera universitaria (opcional)
     """
     try:
         user = user_service.create_user(db=db, user_create=user_in)

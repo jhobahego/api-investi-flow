@@ -51,6 +51,10 @@ class TestUserRegistration:
             "email": "test@example.com",
             "full_name": "Test User",
             "password": "Test123456",
+            "phone_number": "+573001234567",
+            "university": "Universidad Nacional",
+            "research_group": "Grupo de Investigación Test",
+            "career": "Ingeniería de Sistemas",
         }
 
         response = client.post("/api/v1/auth/register", json=user_data)
@@ -59,6 +63,10 @@ class TestUserRegistration:
         data = response.json()
         assert data["email"] == user_data["email"]
         assert data["full_name"] == user_data["full_name"]
+        assert data["phone_number"] == user_data["phone_number"]
+        assert data["university"] == user_data["university"]
+        assert data["research_group"] == user_data["research_group"]
+        assert data["career"] == user_data["career"]
         assert "id" in data
         assert "created_at" in data
         assert "updated_at" in data
@@ -74,6 +82,7 @@ class TestUserRegistration:
             "email": "duplicate@example.com",
             "full_name": "Test User",
             "password": "Test123456",
+            "phone_number": "+573001234567",
         }
 
         # Crear el primer usuario
@@ -81,9 +90,86 @@ class TestUserRegistration:
         assert response1.status_code == 201
 
         # Intentar crear el segundo usuario con el mismo email
+        user_data[
+            "phone_number"
+        ] = "+573001234568"  # Cambiar teléfono para evitar duplicado
         response2 = client.post("/api/v1/auth/register", json=user_data)
         assert response2.status_code == 400
         assert "email ya está registrado" in response2.json()["detail"]
+
+    def test_register_user_minimal_data(self) -> None:
+        """Probar registro con datos mínimos requeridos"""
+        user_data = {
+            "email": "minimal@example.com",
+            "full_name": "Minimal User",
+            "password": "Test123456",
+            "phone_number": "+573001234567",
+        }
+
+        response = client.post("/api/v1/auth/register", json=user_data)
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["university"] is None
+        assert data["research_group"] is None
+        assert data["career"] is None
+
+    def test_register_user_invalid_phone(self) -> None:
+        """Probar registro con teléfono inválido"""
+        invalid_phones = [
+            "123456789",  # Sin código de país
+            "+1234567890",  # Código de país incorrecto
+            "+57123",  # Muy corto
+            "+57312345678901234",  # Muy largo
+            "+570123456789",  # Código de área inválido
+        ]
+
+        for i, phone in enumerate(invalid_phones):
+            user_data = {
+                "email": f"test{i}@example.com",
+                "full_name": "Test User",
+                "password": "Test123456",
+                "phone_number": phone,
+            }
+
+            response = client.post("/api/v1/auth/register", json=user_data)
+            assert response.status_code == 422
+
+    def test_register_user_duplicate_phone(self) -> None:
+        """Probar registro con teléfono duplicado"""
+        user_data_1 = {
+            "email": "user1@example.com",
+            "full_name": "User One",
+            "password": "Test123456",
+            "phone_number": "+573001234567",
+        }
+
+        user_data_2 = {
+            "email": "user2@example.com",
+            "full_name": "User Two",
+            "password": "Test123456",
+            "phone_number": "+573001234567",  # Mismo teléfono
+        }
+
+        # Crear el primer usuario
+        response1 = client.post("/api/v1/auth/register", json=user_data_1)
+        assert response1.status_code == 201
+
+        # Intentar crear el segundo usuario con el mismo teléfono
+        response2 = client.post("/api/v1/auth/register", json=user_data_2)
+        assert response2.status_code == 400
+        assert "teléfono ya está registrado" in response2.json()["detail"]
+
+    def test_register_user_missing_phone(self) -> None:
+        """Probar registro sin teléfono (debe fallar)"""
+        user_data = {
+            "email": "nophone@example.com",
+            "full_name": "No Phone User",
+            "password": "Test123456",
+        }
+
+        response = client.post("/api/v1/auth/register", json=user_data)
+        assert response.status_code == 422
 
     def test_register_user_invalid_email(self) -> None:
         """Probar registro con email inválido"""
@@ -103,21 +189,25 @@ class TestUserRegistration:
                 "email": "test1@example.com",
                 "full_name": "Test User",
                 "password": "123",  # Muy corta
+                "phone_number": "+573001234567",
             },
             {
                 "email": "test2@example.com",
                 "full_name": "Test User",
                 "password": "nouppercasenumber",  # Sin mayúscula ni número
+                "phone_number": "+573001234568",
             },
             {
                 "email": "test3@example.com",
                 "full_name": "Test User",
                 "password": "NOLOWERCASE123",  # Sin minúscula
+                "phone_number": "+573001234569",
             },
             {
                 "email": "test4@example.com",
                 "full_name": "Test User",
                 "password": "NoNumbers",  # Sin números
+                "phone_number": "+573001234570",
             },
         ]
 
@@ -131,6 +221,7 @@ class TestUserRegistration:
             "email": "test@example.com",
             "full_name": " ",  # Nombre vacío
             "password": "Test123456",
+            "phone_number": "+573001234567",
         }
 
         response = client.post("/api/v1/auth/register", json=user_data)
@@ -141,20 +232,32 @@ class TestUserRegistration:
         # Sin email
         response1 = client.post(
             "/api/v1/auth/register",
-            json={"full_name": "Test User", "password": "Test123456"},
+            json={
+                "full_name": "Test User",
+                "password": "Test123456",
+                "phone_number": "+573001234567",
+            },
         )
         assert response1.status_code == 422
 
         # Sin nombre
         response2 = client.post(
             "/api/v1/auth/register",
-            json={"email": "test@example.com", "password": "Test123456"},
+            json={
+                "email": "test@example.com",
+                "password": "Test123456",
+                "phone_number": "+573001234567",
+            },
         )
         assert response2.status_code == 422
 
         # Sin contraseña
         response3 = client.post(
             "/api/v1/auth/register",
-            json={"email": "test@example.com", "full_name": "Test User"},
+            json={
+                "email": "test@example.com",
+                "full_name": "Test User",
+                "phone_number": "+573001234567",
+            },
         )
         assert response3.status_code == 422
