@@ -88,6 +88,12 @@ class UserService:
         """Autenticar un usuario"""
         return user_repository.authenticate(db, email=email, password=password)
 
+    def authenticate_user_by_identifier(
+        self, db: Session, *, identifier: str, password: str
+    ) -> Optional[User]:
+        """Autenticar un usuario usando email como identificador"""
+        return user_repository.authenticate(db, email=identifier, password=password)
+
 
 # Instancia global del servicio
 user_service = UserService()

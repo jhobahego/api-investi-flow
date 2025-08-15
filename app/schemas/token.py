@@ -5,6 +5,7 @@ class Token(BaseModel):
     """Esquema para la respuesta del token de acceso"""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 

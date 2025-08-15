@@ -1,13 +1,19 @@
 from datetime import timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import create_access_token, get_current_user_email, security
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    get_current_user_email,
+    oauth2_scheme,
+)
 from app.database import get_db
-from app.schemas.token import LoginRequest, Token
+from app.schemas.token import Token
 from app.schemas.user import UserCreate, UserResponse
 from app.services.user_service import user_service
 
@@ -44,43 +50,38 @@ def register_user(
 
 
 @router.post("/login", response_model=Token)
-def login_user(*, db: Session = Depends(get_db), login_data: LoginRequest) -> Token:
+def login_access_token(
+    db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()
+) -> Any:
     """
-    Iniciar sesión en el sistema.
-
-    - **email**: Email del usuario registrado
-    - **password**: Contraseña del usuario
-
-    Retorna un token de acceso JWT válido por 30 minutos (por defecto).
+    OAuth2 compatible token login, get an access token for future requests
     """
-    # Autenticar al usuario
-    user = user_service.authenticate_user(
-        db, email=login_data.email, password=login_data.password
+    user = user_service.authenticate_user_by_identifier(
+        db, identifier=form_data.username, password=form_data.password
     )
-
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect email or password",
         )
-
-    if not bool(user.is_active):
+    elif not bool(user.is_active):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
         )
 
-    # Crear token de acceso
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        subject=user.email, expires_delta=access_token_expires
-    )
 
-    return Token(access_token=access_token, token_type="bearer")
+    return {
+        "access_token": create_access_token(
+            user.email, expires_delta=access_token_expires
+        ),
+        "refresh_token": create_refresh_token(user.email),
+        "token_type": "bearer",
+    }
 
 
 @router.post("/logout")
-def logout_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def logout_user(token: str = Depends(oauth2_scheme)):
     """
     Cerrar sesión del usuario.
 
@@ -89,7 +90,7 @@ def logout_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     lo cual está fuera del alcance de este prototipo.
     """
     # Verificar que el token sea válido
-    current_user_email = get_current_user_email(credentials)
+    current_user_email = get_current_user_email(token)
 
     return {
         "message": f"Sesión cerrada exitosamente para {current_user_email}",

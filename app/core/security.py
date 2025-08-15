@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -11,8 +11,8 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Configuración de seguridad para JWT
-security = HTTPBearer()
+# Configuración de seguridad para JWT - OAuth2 para compatibilidad con Swagger UI
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def create_access_token(
@@ -26,6 +26,16 @@ def create_access_token(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject)}
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
+
+
+def create_refresh_token(subject: Union[str, Any]) -> str:
+    """Crear un token de actualización JWT"""
+    expire = datetime.utcnow() + timedelta(days=7)  # 7 días de expiración
+    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
@@ -56,9 +66,7 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)  # type: ignore
 
 
-def get_current_user_email(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> str:
+def get_current_user_email(token: str = Depends(oauth2_scheme)) -> str:
     """Obtener el email del usuario actual desde el token JWT"""
     credential_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -66,7 +74,6 @@ def get_current_user_email(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    token = credentials.credentials
     email = verify_token(token)
     if email is None:
         raise credential_exception
@@ -75,7 +82,7 @@ def get_current_user_email(
 
 # Dependencia para obtener usuario actual
 def get_current_user_dep(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    token: str = Depends(oauth2_scheme),
     db: Session | None = None,
 ):
     """Dependencia para obtener el usuario actual desde la base de datos"""
@@ -86,8 +93,16 @@ def get_current_user_dep(
     if db is None:
         db = next(get_db())
 
-    # Obtener email del token
-    current_user_email = get_current_user_email(credentials)
+    # Obtener email del token directamente
+    credential_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No se pudieron validar las credenciales",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    current_user_email = verify_token(token)
+    if current_user_email is None:
+        raise credential_exception
 
     user = user_service.get_user_by_email(db, email=current_user_email)
     if user is None:
