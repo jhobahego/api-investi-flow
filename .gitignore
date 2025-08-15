@@ -51,6 +51,8 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+test.db*
+.mypy_cache/
 
 # IDE
 .vscode/
