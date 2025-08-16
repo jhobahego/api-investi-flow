@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -27,5 +28,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relaciones con otras tablas (se agregarán en futuras tareas)
-    # projects = relationship("Project", back_populates="owner")
+    # Relaciones con otras tablas
+    projects = relationship(
+        "Project", back_populates="owner", cascade="all, delete-orphan"
+    )
