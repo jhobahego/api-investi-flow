@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -37,7 +37,9 @@ def create_project(
     """
     try:
         project = project_service.create_project(
-            db=db, project_in=project_in, owner_id=current_user.id
+            db=db,
+            project_in=project_in,
+            owner_id=current_user.id,  # type: ignore
         )
         return project
     except HTTPException:
@@ -54,7 +56,7 @@ def list_projects(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[ProjectListResponse]:
+) -> Any:
     """
     Listar todos los proyectos del usuario autenticado.
 
@@ -62,7 +64,7 @@ def list_projects(
     ordenados por fecha de creación (más recientes primero).
     """
     try:
-        projects = project_service.get_user_projects(db=db, owner_id=current_user.id)
+        projects = project_service.get_user_projects(db=db, owner_id=current_user.id)  # type: ignore
         return projects
     except HTTPException:
         raise
@@ -87,7 +89,9 @@ def get_project(
     """
     try:
         project = project_service.get_user_project_by_id(
-            db=db, project_id=project_id, owner_id=current_user.id
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
         return project
     except HTTPException:
@@ -118,7 +122,7 @@ def update_project(
             db=db,
             project_id=project_id,
             project_in=project_in,
-            owner_id=current_user.id,
+            owner_id=current_user.id,  # type: ignore
         )
         return project
     except HTTPException:
@@ -146,7 +150,9 @@ def delete_project(
     """
     try:
         project_service.delete_user_project(
-            db=db, project_id=project_id, owner_id=current_user.id
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
     except HTTPException:
         raise
