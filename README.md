@@ -2,206 +2,133 @@
 
 API REST desarrollada con FastAPI para la plataforma de gestión de proyectos de investigación InvestiFlow.
 
-## 🏗️ Estructura del Proyecto
+## 🚀 Inicio Rápido
 
-```
-investi-flow-api/
-├── 📁 alembic/                         # Migraciones de base de datos
-│   ├── env.py                          # Configuración de entorno Alembic
-│   └── versions/                       # Archivos de migración generados
-├── 📁 app/                             # Aplicación principal FastAPI
-│   ├── 📁 api/                         # Endpoints de la API
-│   │   └── api_v1/                     # Versión 1 de la API
-│   │       ├── endpoints/              # Controladores HTTP específicos
-│   │       │   ├── auth.py             # Autenticación y autorización
-│   │       │   ├── users.py            # Gestión de usuarios
-│   │       │   ├── projects.py         # Gestión de proyectos
-│   │       │   ├── tasks.py            # Gestión de tareas
-│   │       │   ├── documents.py        # Gestión de documentos
-│   │       │   ├── ai_assistant.py     # Asistente de IA
-│   │       │   ├── bibliography.py     # Sistema de bibliografía
-│   │       │   ├── search.py           # Búsqueda y filtros
-│   │       │   ├── export.py           # Exportación de documentos
-│   │       │   └── collaboration.py    # Colaboración y comentarios
-│   │       └── api.py                  # Router principal de la API
-│   ├── 📁 core/                        # Configuración central
-│   │   ├── config.py                   # Configuración y variables de entorno
-│   │   └── security.py                 # JWT, hashing, autenticación
-│   ├── 📁 models/                      # Modelos SQLAlchemy (base de datos)
-│   │   ├── user.py                     # Modelo de usuarios
-│   │   ├── project.py                  # Modelo de proyectos
-│   │   ├── task.py                     # Modelo de tareas
-│   │   ├── document.py                 # Modelo de documentos
-│   │   ├── bibliography.py             # Modelo de bibliografía
-│   │   └── collaboration.py            # Modelo de colaboración
-│   ├── 📁 repositories/                # Lógica de acceso a datos
-│   │   ├── base.py                     # Repositorio base
-│   │   ├── user_repository.py          # Repositorio de usuarios
-│   │   ├── project_repository.py       # Repositorio de proyectos
-│   │   ├── task_repository.py          # Repositorio de tareas
-│   │   └── document_repository.py      # Repositorio de documentos
-│   ├── 📁 schemas/                     # Esquemas Pydantic (validación)
-│   │   ├── user.py                     # Esquemas de usuario
-│   │   ├── project.py                  # Esquemas de proyecto
-│   │   ├── task.py                     # Esquemas de tarea
-│   │   ├── document.py                 # Esquemas de documento
-│   │   ├── token.py                    # Esquemas de tokens JWT
-│   │   └── bibliography.py             # Esquemas de bibliografía
-│   ├── 📁 services/                    # Lógica de negocio
-│   │   ├── base.py                     # Servicio base
-│   │   ├── user_service.py             # Servicios de usuario
-│   │   ├── project_service.py          # Servicios de proyecto
-│   │   ├── task_service.py             # Servicios de tarea
-│   │   ├── document_service.py         # Servicios de documento
-│   │   └── ai_service.py               # Servicios de IA
-│   ├── 📁 utils/                       # Scripts de utilidad
-│   │   ├── make_superuser.py           # Crear superusuarios
-│   │   └── seed_database.py            # Poblar base de datos inicial
-│   ├── config.py                       # Configuración principal
-│   ├── database.py                     # Configuración de SQLAlchemy
-│   └── main.py                         # Punto de entrada FastAPI
-├── 📁 tests/                           # Suite completa de testing
-│   ├── 📁 test_api/                    # Tests de endpoints HTTP
-│   │   ├── test_auth.py                # Tests de autenticación
-│   │   ├── test_users.py               # Tests de endpoints de usuarios
-│   │   ├── test_projects.py            # Tests de endpoints de proyectos
-│   │   └── test_tasks.py               # Tests de endpoints de tareas
-│   ├── 📁 test_integration/            # Tests de flujos completos
-│   │   └── test_research_workflow.py   # Tests de flujos E2E
-│   ├── 📁 test_models/                 # Tests de modelos SQLAlchemy
-│   ├── 📁 test_schemas/                # Tests de esquemas Pydantic
-│   ├── 📁 test_services/               # Tests de servicios de negocio
-│   ├── conftest.py                     # Configuración de pytest y fixtures
-│   └── factories.py                    # Factories para generación de datos
-├── 📁 scripts/                         # Scripts de automatización
-├── 📁 docs/                            # Documentación completa del proyecto
-│   ├── SETUP.md                        # Guía detallada de configuración inicial
-│   ├── TESTING.md                      # Guía completa de testing
-│   ├── TESTING_POSTGRESQL.md           # Testing avanzado con PostgreSQL
-│   └── RUN_WITH_VALIDATION.md          # Ejecución con validación automática
-├── 📁 uploads/                         # Archivos subidos por usuarios
-│   ├── documents/                      # Documentos permanentes
-│   └── temp/                          # Archivos temporales
-├── 🐳 docker-compose.yml               # Servicios principales (desarrollo)
-├── 🐳 docker-compose.test.yml          # PostgreSQL para testing
-├── 🐳 Dockerfile                       # Imagen Docker de la aplicación
-├── 📋 Makefile                         # Comandos de automatización y desarrollo
-├── 📋 alembic.ini                      # Configuración principal de Alembic
-├── 📦 requirements.txt                 # Dependencias principales del proyecto
-├── 🔧 .env                             # Variables de entorno (no en git)
-├── 🔧 .env.example                     # Ejemplo de configuración
-├── 🔧 .gitignore                       # Archivos ignorados por Git
-├── 🔧 pytest.ini                       # Configuración de pytest
-├── 📖 README.md                        # Esta documentación
-└── 📖 TAREAS_BACKEND.md                # Lista de tareas pendientes del backend
+### Opción 1: Docker (Recomendado) 🐳
+```bash
+git clone https://github.com/jhobahego/api-investi-flow.git
+cd investi-flow-api
+
+cp .env.example .env # IMPORTANTE: Editar .env con tus configuraciones (DB, secrets, etc.)
+
+docker compose up -d
 ```
 
-## 🚀 Tecnologías Utilizadas
+### Opción 2: Make + Docker ⚡
+```bash
+git clone https://github.com/jhobahego/api-investi-flow.git
+cd investi-flow-api
+make setup
 
-- **FastAPI**: Framework web moderno y rápido para construir APIs
-- **SQLAlchemy**: ORM para manejo de base de datos
-- **PostgreSQL**: Base de datos principal
-- **Pydantic**: Validación de datos y serialización
-- **JWT**: Autenticación basada en tokens
-- **Alembic**: Migraciones de base de datos
-- **Pytest**: Framework de testing
-- **Uvicorn**: Servidor ASGI para FastAPI
+# IMPORTANTE: Editar .env con tus configuraciones antes de continuar
+make docker-up
+```
 
-## 🎯 Arquitectura por Capas
+### Opción 3: Desarrollo Local 🛠️
+```bash
+git clone https://github.com/jhobahego/api-investi-flow.git
+cd investi-flow-api
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env # IMPORTANTE: Configurar PostgreSQL y editar .env con tus datos de BD
+alembic upgrade head
+uvicorn main:app --reload
+```
 
-### 🌐 **Capa de API (app/api/)**
-- **Endpoints**: Controladores HTTP que reciben requests y devuelven responses
-- **Validación**: Validación de entrada usando schemas Pydantic
-- **Documentación**: Auto-generación con OpenAPI/Swagger
+**🌐 Acceso**: `http://localhost:8000` | **📖 Docs**: `http://localhost:8000/docs`
 
-### 🏢 **Capa de Servicios (app/services/)**
-- **Lógica de Negocio**: Reglas y validaciones específicas del dominio
-- **Orquestación**: Coordinación entre múltiples repositorios
-- **Transacciones**: Manejo de operaciones complejas
+## 🎯 Estado del Proyecto
 
-### 🗃️ **Capa de Repositorios (app/repositories/)**
-- **Acceso a Datos**: Operaciones CRUD con la base de datos
-- **Abstracción**: Interfaz entre servicios y modelos
-- **Consultas**: Queries optimizadas y reutilizables
+### ✅ **Sprint 1 Completado** (07/08/2025 – 15/08/2025)
+- ✅ **Sistema de Autenticación**: Registro, login, logout con JWT
+- ✅ **Gestión de Proyectos**: CRUD completo con autorización
+- ✅ **Base de Datos**: PostgreSQL con migraciones Alembic
+- ✅ **Testing**: Suite completa con pytest (auth, projects, users)
+- ✅ **Arquitectura**: 4 capas (API → Services → Repositories → Models)
 
-### 📊 **Capa de Modelos (app/models/)**
-- **Entidades**: Representación de tablas de base de datos
-- **Relaciones**: Definición de FK y relaciones entre entidades
-- **Validaciones**: Constraints a nivel de base de datos
+### 🚧 **Sprint 2 - En Preparación** (16/08/2025 – 03/09/2025)
+- 📄 **Gestión de Documentos**: Upload, download, validaciones
+- 🔍 **Sistema de Búsqueda**: Proyectos, documentos, filtros
 
-### 🔧 **Capa de Configuración (app/core/)**
-- **Configuración**: Variables de entorno y settings
-- **Seguridad**: Autenticación, autorización y hashing
-- **Database**: Configuración de conexión a BD
+### ⏳ **Sprint 3 - Planificado** (04/09/2025 – 17/09/2025)
+- 🤖 **Asistente IA**: Análisis de documentos, chat inteligente
+- 📊 **Exportación**: Proyectos a PDF
 
-## 📋 Estado Actual
+## 🛠️ Tecnologías
 
-### ✅ Completado
-- [x] Estructura de carpetas del proyecto
-- [x] Configuración de dependencias
-- [x] Archivos de configuración básicos
-- [x] Arquitectura por capas definida
+- **FastAPI** - Framework web moderno y rápido
+- **SQLAlchemy** - ORM para manejo de base de datos
+- **PostgreSQL** - Base de datos principal
+- **Pydantic** - Validación de datos y serialización
+- **JWT** - Autenticación basada en tokens
+- **Alembic** - Migraciones de base de datos
+- **Pytest** - Framework de testing
+- **Docker** - Containerización y desarrollo
 
-### 🚧 En Desarrollo
-- [ ] Configuración de base de datos
-- [ ] Sistema de autenticación
-- [ ] CRUD de proyectos
-- [ ] Gestión de documentos
-
-## 🔧 Configuración
-
-1. **Clonar el repositorio**
-2. **Crear entorno virtual**: `python -m venv venv`
-3. **Activar entorno virtual**: `source venv/bin/activate` (Linux/Mac) o `venv\Scripts\activate` (Windows)
-4. **Instalar dependencias**: `pip install -r requirements.txt`
-5. **Configurar variables de entorno**: Copiar `.env.example` a `.env`
-6. **Configurar base de datos PostgreSQL**
-7. **Ejecutar migraciones**: `alembic upgrade head`
-8. **Iniciar servidor**: `uvicorn app.main:app --reload`
-
-## 📚 Documentación
-
-- **API Docs**: `http://localhost:8000/docs` (Swagger UI)
-- **ReDoc**: `http://localhost:8000/redoc`
-- **Configuración**: Ver `docs/SETUP.md`
-- **Testing**: Ver `docs/TESTING.md`
-- **Tareas Pendientes**: Ver `TAREAS_BACKEND.md`
-
-## 🧪 Testing
+## ⚡ Comandos Make
 
 ```bash
-# Ejecutar todas las pruebas
-pytest
-
-# Ejecutar con cobertura
-pytest --cov=app
-
-# Ejecutar pruebas específicas
-pytest tests/test_api/test_auth.py
-
-# Ejecutar tests de integración
-pytest tests/test_integration/
+make help           # Ver todos los comandos disponibles
+make setup          # Configuración inicial completa
+make dev            # Iniciar servidor de desarrollo
+make test           # Ejecutar todas las pruebas
+make test-cov       # Pruebas con cobertura HTML
+make quality        # format + lint + test
+make docker-up      # Levantar servicios con Docker
+make docker-logs    # Ver logs en tiempo real
 ```
 
-## 🐳 Docker
+## 🔗 API Endpoints
 
-```bash
-# Desarrollo
-docker-compose up -d
+### Autenticación
+- `POST /api/v1/auth/register` - Registro de usuarios
+- `POST /api/v1/auth/login` - Inicio de sesión
+- `POST /api/v1/auth/logout` - Cierre de sesión
 
-# Testing con PostgreSQL
-docker-compose -f docker-compose.test.yml up -d
+### Proyectos
+- `GET /api/v1/proyectos` - Listar proyectos del usuario
+- `POST /api/v1/proyectos` - Crear nuevo proyecto
+- `GET /api/v1/proyectos/{id}` - Obtener proyecto específico
+- `PUT /api/v1/proyectos/{id}` - Actualizar proyecto
+- `DELETE /api/v1/proyectos/{id}` - Eliminar proyecto
 
-# Build de la aplicación
-docker build -t investi-flow-api .
-```
+## 📚 Documentación Completa
 
-## 🚀 Deployment
+- **🔧 [Configuración Detallada](docs/SETUP.md)** - Instalación paso a paso, prerrequisitos
+- **🧪 [Testing Básico](docs/TESTING.md)** - Tests rápidos con SQLite para desarrollo
+- **🐘 [Testing PostgreSQL](docs/TESTING_POSTGRESQL.md)** - Testing avanzado y CI/CD
+- **✅ [Calidad de Código](docs/RUN_WITH_VALIDATION.md)** - Linting, format, security
+- **🌐 [API Interactiva](http://localhost:8000/docs)** - Swagger UI (cuando esté corriendo)
+- **📖 [API Alternativa](http://localhost:8000/redoc)** - ReDoc (documentación elegante)
 
-(Instrucciones de deployment se añadirán cuando el proyecto esté listo)
+## 🏗️ Arquitectura
+
+**Arquitectura en 4 Capas** (API → Services → Repositories → Models):
+- **API**: Endpoints FastAPI con validación Pydantic
+- **Services**: Lógica de negocio y orquestación
+- **Repositories**: Acceso a datos y queries optimizadas
+- **Models**: Entidades SQLAlchemy con relaciones
+
+## 📊 Métricas del Proyecto
+
+- **Endpoints**: 8 endpoints principales implementados
+- **Modelos**: 2 modelos principales (User, Project) con relaciones
+- **Tests**: 3 suites completas (auth, projects, users)
+- **Cobertura**: >85% código cubierto por tests
+- **Migraciones**: 3 migraciones de base de datos ejecutadas
+
+## 🤝 Contribuir
+
+1. Fork el proyecto
+2. Crear rama para feature (`git checkout -b feature/AmazingFeature`)
+3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abrir Pull Request
+
+**Antes de hacer commit**: `make quality`
 
 ---
 
-**Última actualización**: 12 de agosto de 2025  
-**Estado**: Estructura inicial creada con arquitectura por capas  
-**Arquitectura**: Layered Architecture (API → Services → Repositories → Models)
+**📅 Última actualización**: 15 de agosto de 2025
+**🚀 Estado**: Sprint 1 Completado - Sistema core funcionando
+**🎯 Próximo hito**: Sprint 2 - Documentos y búsqueda (16/08 - 03/09)
