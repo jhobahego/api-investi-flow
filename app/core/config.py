@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database
-    DATABASE_URL: str = "postgresql://neondb_owner:npg_QHezcOvIoT92@ep-soft-heart-acuu3avl-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    DATABASE_URL: Optional[str] = None  # Set via environment variable or .env file
     DATABASE_HOST: str = "localhost"
     DATABASE_PORT: int = 5432
     DATABASE_NAME: str = "investi_flow_db"
