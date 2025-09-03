@@ -1,11 +1,9 @@
 from datetime import datetime, timedelta
 from typing import Any, Union
 
-from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
 
 from app.core.config import settings
 
@@ -64,55 +62,3 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """Generar el hash de una contraseña"""
     return pwd_context.hash(password)  # type: ignore
-
-
-def get_current_user_email(token: str = Depends(oauth2_scheme)) -> str:
-    """Obtener el email del usuario actual desde el token JWT"""
-    credential_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    email = verify_token(token)
-    if email is None:
-        raise credential_exception
-    return email
-
-
-# Dependencia para obtener usuario actual
-def get_current_user_dep(
-    token: str = Depends(oauth2_scheme),
-    db: Session | None = None,
-):
-    """Dependencia para obtener el usuario actual desde la base de datos"""
-    from app.database import get_db
-    from app.services.user_service import user_service
-
-    # Crear sesión de BD si no se proporciona
-    if db is None:
-        db = next(get_db())
-
-    # Obtener email del token directamente
-    credential_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    current_user_email = verify_token(token)
-    if current_user_email is None:
-        raise credential_exception
-
-    user = user_service.get_user_by_email(db, email=current_user_email)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
-
-    if not bool(user.is_active):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
-        )
-
-    return user

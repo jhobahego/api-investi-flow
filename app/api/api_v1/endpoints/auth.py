@@ -9,8 +9,8 @@ from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
-    get_current_user_email,
     oauth2_scheme,
+    verify_token,
 )
 from app.database import get_db
 from app.schemas.token import Token
@@ -90,9 +90,15 @@ def logout_user(token: str = Depends(oauth2_scheme)):
     lo cual está fuera del alcance de este prototipo.
     """
     # Verificar que el token sea válido
-    current_user_email = get_current_user_email(token)
+    email = verify_token(token)
+    if email is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No se pudieron validar las credenciales",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     return {
-        "message": f"Sesión cerrada exitosamente para {current_user_email}",
+        "message": f"Sesión cerrada exitosamente para {email}",
         "detail": "Por favor, elimina el token del lado del cliente",
     }
