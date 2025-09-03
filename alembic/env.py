@@ -35,6 +35,9 @@ target_metadata = Base.metadata
 
 def get_url() -> str:
     """Obtener la URL de la base de datos desde la configuración"""
+    if settings.DATABASE_URL is None:
+        raise ValueError("DATABASE_URL is not set in the configuration.")
+
     return settings.DATABASE_URL
 
 
