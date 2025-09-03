@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     DATABASE_PASSWORD: str = ""
 
     # JWT Security
-    SECRET_KEY: str = "your-secret-key-change-this-in-production-development"
+    SECRET_KEY: Optional[str] = None  # Set via environment variable or .env file
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     GOOGLE_AI_API_KEY: Optional[str] = None
 
     # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: Optional[str] = "redis://localhost:6379/0"
 
     # Email
     SMTP_TLS: bool = True
