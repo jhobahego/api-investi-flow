@@ -122,7 +122,7 @@ ENVIRONMENT=development
 PROJECT_NAME=InvestiFlow API
 
 # CORS
-BACKEND_CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"]
+BACKEND_CORS_ORIGIN=http://localhost:5173
 ```
 
 #### 4. Configurar PostgreSQL
@@ -186,7 +186,7 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 #### CORS
 ```env
 # URLs permitidas para CORS (separadas por comas)
-BACKEND_CORS_ORIGINS=["http://localhost:3000","http://localhost:8080","http://localhost:5173"]
+BACKEND_CORS_ORIGIN=http://localhost:5173
 ```
 
 #### Entorno

@@ -1,6 +1,5 @@
-from typing import List, Optional, Union
+from typing import Optional
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,18 +26,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = []
-
-    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
-    @classmethod
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, str):
-            return [v.strip()]
-        elif isinstance(v, list):
-            return v
-        raise ValueError(f"Invalid type for CORS origins: {type(v)}")
+    BACKEND_CORS_ORIGIN: str = "http://localhost:5173"
 
     # File Upload
     MAX_FILE_SIZE: int = 10485760  # 10MB
