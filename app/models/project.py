@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
@@ -45,13 +45,27 @@ class Project(Base):
     status = Column(
         String(50), default=ProjectStatus.PLANNING.value, nullable=False
     )  # Almacenar como string
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
     updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
 
     # Relaciones
     owner = relationship("User", back_populates="projects")
-    # tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
-    # documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    phases = relationship(
+        "Phase", back_populates="project", cascade="all, delete-orphan"
+    )
+    attachment = relationship(
+        "Attachment",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     # bibliographies = relationship("Bibliography", back_populates="project", cascade="all, delete-orphan")
