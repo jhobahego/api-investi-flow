@@ -1,9 +1,12 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.project import ProjectStatus, ResearchType
+
+from .attachment import AttachmentResponse
+from .phase import PhaseListResponse, PhaseResponse
 
 
 # Esquemas de entrada
@@ -94,5 +97,25 @@ class ProjectListResponse(BaseModel):
     category: Optional[str]
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# Esquemas con relaciones anidadas (para respuestas detalladas)
+class ProjectWithPhasesResponse(ProjectResponse):
+    """Esquema de respuesta para proyecto con sus fases"""
+
+    # Se importarán dinámicamente para evitar imports circulares
+    phases: List["PhaseResponse"] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectDetailResponse(ProjectResponse):
+    """Esquema de respuesta completo para proyecto con todas sus relaciones"""
+
+    # Se importarán dinámicamente para evitar imports circulares
+    phases: List["PhaseListResponse"] = Field(default_factory=list)
+    attachment: Optional["AttachmentResponse"] = None
 
     model_config = {"from_attributes": True}
