@@ -160,12 +160,6 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
                 detail="Fase no encontrada",
             )
 
-        # --- INICIO DE CÓDIGO DE DEPURACIÓN ---
-        print(f"Obtenida la fase con ID: {phase.id}")
-        print(f"El ID del proyecto asociado es: {phase.project_id}")
-        print(f"El tipo de 'phase.project_id' es: {type(phase.project_id)}")
-        # --- FIN DE CÓDIGO DE DEPURACIÓN ---
-
         # Verificar que el proyecto de la fase pertenece al usuario
         project = project_repository.get_project_by_owner_and_id(
             db=db,
