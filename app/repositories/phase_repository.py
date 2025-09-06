@@ -13,15 +13,6 @@ class PhaseRepository(BaseRepository[Phase, PhaseCreate, PhaseUpdate]):
     def __init__(self) -> None:
         super().__init__(Phase)
 
-    def get_phases_by_project(self, db: Session, project_id: int) -> List[Phase]:
-        """Obtener todas las fases de un proyecto específico ordenadas por posición"""
-        return (
-            db.query(self.model)
-            .filter(Phase.project_id == project_id)
-            .order_by(Phase.position)
-            .all()
-        )
-
     def get_phase_by_project_and_id(
         self, db: Session, phase_id: int, project_id: int
     ) -> Optional[Phase]:
@@ -117,14 +108,14 @@ class PhaseRepository(BaseRepository[Phase, PhaseCreate, PhaseUpdate]):
 
         db.commit()
 
-    def get_phases_with_tasks(self, db: Session, phase_id: int) -> Optional[Phase]:
-        """Obtener todas las fases de un proyecto con sus tareas asociadas"""
+    def get_phase_tasks(self, db: Session, phase_id: int) -> List[Phase]:
+        """Obtener todas las tareas de una fase específica"""
         return (
             db.query(Phase)
             .filter(Phase.id == phase_id)
             .options(joinedload(Phase.tasks))
             .order_by(Phase.position)
-            .first()
+            .all()
         )
 
 
