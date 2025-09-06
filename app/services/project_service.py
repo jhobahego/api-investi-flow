@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -173,6 +173,36 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error al eliminar el proyecto: {str(e)}",
+            )
+
+    def get_project_with_phases(
+        self, db: Session, project_id: int
+    ) -> Optional[Project]:
+        """
+        Obtener todas las fases de un proyecto de un usuario.
+
+        Args:
+            db: Sesión de base de datos
+            project_id: ID del proyecto
+            owner_id: ID del usuario propietario
+
+        Returns:
+            Lista de fases del proyecto
+
+        Raises:
+            HTTPException: Si el proyecto no existe o no pertenece al usuario
+        """
+
+        try:
+            phases = project_repository.get_project_with_phases(
+                db=db, project_id=project_id
+            )
+            return phases
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al obtener las fases del proyecto: {str(e)}",
             )
 
 

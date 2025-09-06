@@ -75,6 +75,23 @@ def list_projects(
         )
 
 
+@router.get("/{project_id}/phases")
+async def get_project_with_phases(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.get_project_with_phases(db=db, project_id=project_id)
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise
+
+
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(
     *,
