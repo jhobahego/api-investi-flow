@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -77,7 +78,6 @@ class PhaseUpdate(BaseModel):
     @classmethod
     def validate_color(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            # Validar formato hexadecimal
             if not v.startswith("#") or len(v) != 7:
                 raise ValueError("El color debe estar en formato hexadecimal (#RRGGBB)")
             try:
@@ -87,12 +87,16 @@ class PhaseUpdate(BaseModel):
         return v
 
 
-# Esquemas de salida
+class PhaseOrder(BaseModel):
+    id: int
+    position: int
+
+
 class PhaseResponse(PhaseBase):
     """Esquema de respuesta para una fase"""
 
     id: int
-    project_id: int
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
