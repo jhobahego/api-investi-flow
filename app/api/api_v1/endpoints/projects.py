@@ -76,14 +76,18 @@ def list_projects(
 
 
 @router.get("/{project_id}/phases")
-async def get_project_with_phases(
+async def get_project_with_phases(  # TODO: Un usuario solo debe poder obtener las fases de sus propios proyectos
     *,
     db: Session = Depends(get_db),
     project_id: int,
     current_user: User = Depends(get_current_user),
 ):
     try:
-        return project_service.get_project_with_phases(db=db, project_id=project_id)
+        return project_service.get_project_with_phases(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
+        )
 
     except HTTPException:
         raise
