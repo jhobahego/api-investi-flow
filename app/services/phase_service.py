@@ -79,9 +79,10 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
         except HTTPException:
             raise
         except Exception as e:
+            print(f"Error al crear la fase: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al crear la fase: {str(e)}",
+                detail="Ha ocurrido un error al crear la fase",
             )
 
     def get_project_phases(
@@ -120,9 +121,10 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
         except HTTPException:
             raise
         except Exception as e:
+            print(f"Error al obtener las fases: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al obtener las fases: {str(e)}",
+                detail="Ha ocurrido un error al obtener las fases del proyecto",
             )
 
     def get_phases_with_tasks(self, db: Session, phase_id: int) -> Optional[Phase]:
@@ -131,12 +133,32 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
 
         Args:
             db: Sesión de base de datos
-            project_id: ID del proyecto
+            phase_id: ID de la fase
 
         Returns:
             Lista de fases con tareas asociadas
+
+        Raises:
+            HTTPException: Si la fase no existe
         """
-        return phase_repository.get_phases_with_tasks(db=db, phase_id=phase_id)
+        try:
+            phase = phase_repository.get(db=db, id=phase_id)
+            if not phase:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Fase no encontrada",
+                )
+
+            return phase_repository.get_phases_with_tasks(db=db, phase_id=phase_id)
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            print(f"Error al obtener las fases con tareas: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ha ocurrido un error al intentar obtener las fases con tareas",
+            )
 
     def get_phase_by_id(self, db: Session, phase_id: int, owner_id: int) -> Phase:
         """
@@ -153,26 +175,36 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
         Raises:
             HTTPException: Si la fase no existe o no pertenece al usuario
         """
-        phase = phase_repository.get(db=db, id=phase_id)
-        if not phase:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Fase no encontrada",
-            )
+        try:
+            phase = phase_repository.get(db=db, id=phase_id)
+            if not phase:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Fase no encontrada",
+                )
 
-        # Verificar que el proyecto de la fase pertenece al usuario
-        project = project_repository.get_project_by_owner_and_id(
-            db=db,
-            project_id=phase.project_id,  # type: ignore
-            owner_id=owner_id,
-        )
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Fase no encontrada o no tienes permisos para acceder a ella",
+            # Verificar que el proyecto de la fase pertenece al usuario
+            project = project_repository.get_project_by_owner_and_id(
+                db=db,
+                project_id=phase.project_id,  # type: ignore
+                owner_id=owner_id,
             )
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Fase no encontrada o no tienes permisos para acceder a ella",
+                )
 
-        return phase
+            return phase
+        except HTTPException:
+            raise
+
+        except Exception as e:
+            print(f"Error al obtener la fase: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ha ocurrido un error al obtener la fase",
+            )
 
     def update_phase(
         self, db: Session, phase_id: int, phase_in: PhaseUpdate, owner_id: int
@@ -257,9 +289,10 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
             raise
         except Exception as e:
             db.rollback()
+            print(f"Error al actualizar la fase: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al actualizar la fase: {str(e)}",
+                detail="Ha ocurrido un error al actualizar la fase",
             )
 
     def delete_phase(self, db: Session, phase_id: int, owner_id: int) -> bool:
@@ -287,9 +320,10 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
 
         except Exception as e:
             db.rollback()
+            print(f"Error al eliminar la fase: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al eliminar la fase: {str(e)}",
+                detail="Ha ocurrido un error al eliminar la fase",
             )
 
     def reorder_phases(
@@ -352,9 +386,10 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
             raise
         except Exception as e:
             db.rollback()
+            print(f"Error al reordenar las fases: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al reordenar las fases: {str(e)}",
+                detail="Ha ocurrido un error al reordenar las fases",
             )
 
 
