@@ -13,6 +13,15 @@ class PhaseRepository(BaseRepository[Phase, PhaseCreate, PhaseUpdate]):
     def __init__(self) -> None:
         super().__init__(Phase)
 
+    def get_phases_by_project(self, db: Session, project_id: int) -> List[Phase]:
+        """Obtener todas las fases de un proyecto específico ordenadas por posición"""
+        return (
+            db.query(self.model)
+            .filter(Phase.project_id == project_id)
+            .order_by(Phase.position)
+            .all()
+        )
+
     def get_phase_by_project_and_id(
         self, db: Session, phase_id: int, project_id: int
     ) -> Optional[Phase]:

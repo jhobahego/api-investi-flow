@@ -85,61 +85,17 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
                 detail="Ha ocurrido un error al crear la fase",
             )
 
-    def get_project_phases(
-        self, db: Session, project_id: int, owner_id: int
-    ) -> List[Phase]:
+    def get_phase_tasks(self, db: Session, phase_id: int) -> List[Phase]:
         """
-        Obtener todas las fases de un proyecto.
-
-        Args:
-            db: Sesión de base de datos
-            project_id: ID del proyecto
-            owner_id: ID del usuario propietario
-
-        Returns:
-            Lista de fases del proyecto ordenadas por posición
-
-        Raises:
-            HTTPException: Si el proyecto no existe o no pertenece al usuario
-        """
-        try:
-            # Verificar que el proyecto existe y pertenece al usuario
-            project = project_repository.get_project_by_owner_and_id(
-                db=db, project_id=project_id, owner_id=owner_id
-            )
-            if not project:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Proyecto no encontrado o no tienes permisos para acceder a él",
-                )
-
-            phases = phase_repository.get_phases_by_project(
-                db=db, project_id=project_id
-            )
-            return phases
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            print(f"Error al obtener las fases: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Ha ocurrido un error al obtener las fases del proyecto",
-            )
-
-    def get_phases_with_tasks(self, db: Session, phase_id: int) -> Optional[Phase]:
-        """
-        Obtener todas las fases de un proyecto con sus tareas asociadas.
+        Obtener todas las tareas de una fase.
 
         Args:
             db: Sesión de base de datos
             phase_id: ID de la fase
+            project_id: ID del proyecto al que pertenece la fase
 
         Returns:
-            Lista de fases con tareas asociadas
-
-        Raises:
-            HTTPException: Si la fase no existe
+            Todas las tareas de la fase
         """
         try:
             phase = phase_repository.get(db=db, id=phase_id)
@@ -149,15 +105,25 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
                     detail="Fase no encontrada",
                 )
 
-            return phase_repository.get_phases_with_tasks(db=db, phase_id=phase_id)
+            # Verificar que un usuario solo pueda obtener tareas de fases de sus propios proyectos
+            phase = phase_repository.get_phase_by_project_and_id(
+                db=db, phase_id=phase_id, project_id=phase.project_id  # type: ignore
+            )
+            if not phase:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No tienes permisos para acceder a las tareas de esta fase",
+                )
+
+            return phase_repository.get_phase_tasks(db=db, phase_id=phase_id)
         except HTTPException:
             raise
 
         except Exception as e:
-            print(f"Error al obtener las fases con tareas: {str(e)}")
+            print(f"Error al obtener la fase con tareas: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Ha ocurrido un error al intentar obtener las fases con tareas",
+                detail="Ha ocurrido un error al obtener la fase con tareas",
             )
 
     def get_phase_by_id(self, db: Session, phase_id: int, owner_id: int) -> Phase:
