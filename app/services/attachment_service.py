@@ -55,7 +55,7 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
         if self.attachment_repository.has_attachment(db, parent_id, parent_type):
             raise HTTPException(
                 status_code=400,
-                detail=f"La {parent_type} ya tiene un documento adjunto. Use replace_attachment para reemplazarlo.",
+                detail=f"La {parent_type} ya tiene un documento adjunto.",
             )
 
         # Obtener información del archivo
