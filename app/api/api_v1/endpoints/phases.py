@@ -1,12 +1,14 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.schemas.attachment import AttachmentResponse
 from app.schemas.phase import PhaseCreate, PhaseListResponse, PhaseOrder, PhaseUpdate
+from app.services.attachment_service import attachment_service
 from app.services.phase_service import phase_service
 
 router = APIRouter()
@@ -25,6 +27,63 @@ async def create_phase(
         phase_in=phase_in,
         owner_id=user_id,  # type: ignore
     )
+
+
+@router.post("/{phase_id}/documentos", status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    *,
+    db: Session = Depends(get_db),
+    phase_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    """
+    Subir un nuevo documento a la fase.
+
+    Solo el propietario del proyecto al que pertenece la fase puede subir documentos.
+    """
+    try:
+        document = attachment_service.create_attachment(
+            db=db,
+            file=file,
+            parent_type="phase",
+            parent_id=phase_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        return AttachmentResponse.model_validate(document)
+
+    except Exception:
+        raise
+
+
+@router.get("/{phase_id}/documentos")
+async def get_phase_document(
+    *,
+    db: Session = Depends(get_db),
+    phase_id: int,
+    current_user: User = Depends(get_current_user),
+) -> Optional[AttachmentResponse]:
+    """
+    Obtener el documento adjunto de la fase.
+
+    Solo el propietario del proyecto al que pertenece la fase puede acceder al documento.
+    Retorna None si no hay documento adjunto.
+    """
+    try:
+        attachment = attachment_service.get_attachment_by_parent(
+            db=db,
+            parent_type="phase",
+            parent_id=phase_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        if attachment:
+            return AttachmentResponse.model_validate(attachment)
+        return None
+
+    except Exception:
+        raise
 
 
 @router.get("/{phase_id}", response_model=PhaseListResponse)

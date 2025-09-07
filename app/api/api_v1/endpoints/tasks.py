@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas import TaskCreate, TaskResponse, TaskUpdate
+from app.schemas.attachment import AttachmentResponse
 from app.services import task_service
+from app.services.attachment_service import attachment_service
 
 router = APIRouter()
 
@@ -34,6 +38,63 @@ async def create_task(
         task_in=task_in,
         owner_id=user_id,  # type: ignore
     )
+
+
+@router.post("/{task_id}/documentos", status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    *,
+    db: Session = Depends(get_db),
+    task_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    """
+    Subir un nuevo documento a la tarea.
+
+    Solo el propietario del proyecto al que pertenece la tarea puede subir documentos.
+    """
+    try:
+        document = attachment_service.create_attachment(
+            db=db,
+            file=file,
+            parent_type="task",
+            parent_id=task_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        return AttachmentResponse.model_validate(document)
+
+    except Exception:
+        raise
+
+
+@router.get("/{task_id}/documentos")
+async def get_task_document(
+    *,
+    db: Session = Depends(get_db),
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+) -> Optional[AttachmentResponse]:
+    """
+    Obtener el documento adjunto de la tarea.
+
+    Solo el propietario del proyecto al que pertenece la tarea puede acceder al documento.
+    Retorna None si no hay documento adjunto.
+    """
+    try:
+        attachment = attachment_service.get_attachment_by_parent(
+            db=db,
+            parent_type="task",
+            parent_id=task_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        if attachment:
+            return AttachmentResponse.model_validate(attachment)
+        return None
+
+    except Exception:
+        raise
 
 
 @router.get("/", response_model=list[TaskResponse])
