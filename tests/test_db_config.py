@@ -5,6 +5,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
+
+# Importar todos los modelos para que SQLAlchemy los reconozca
+from app.models import *  # noqa: F403, F401
 from main import app
 
 # Configuración de testing (similar a test_auth.py)
