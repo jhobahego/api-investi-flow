@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from app.core.config import settings
 
+if settings.DATABASE_URL is None:
+    raise ValueError("DATABASE_URL is not set in the configuration.")
+
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

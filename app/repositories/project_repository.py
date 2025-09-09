@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.project import Project
 from app.repositories.base import BaseRepository
@@ -52,6 +52,17 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         db.commit()
         db.refresh(project)
         return project
+
+    def get_project_with_phases(
+        self, db: Session, project_id: int
+    ) -> Optional[Project]:
+        """Obtener todas las fases asociadas a un proyecto"""
+        return (
+            db.query(Project)
+            .filter(Project.id == project_id)
+            .options(joinedload(Project.phases))
+            .first()
+        )
 
 
 # Instancia global del repositorio

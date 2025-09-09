@@ -1,17 +1,19 @@
-from typing import Any, List
+from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.schemas.attachment import AttachmentResponse
 from app.schemas.project import (
     ProjectCreate,
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdate,
 )
+from app.services.attachment_service import attachment_service
 from app.services.project_service import project_service
 
 router = APIRouter()
@@ -51,6 +53,34 @@ def create_project(
         )
 
 
+@router.post("/{project_id}/documentos", status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    """
+    Subir un nuevo documento al proyecto.
+
+    Solo el propietario del proyecto puede subir documentos.
+    """
+    try:
+        document = attachment_service.create_attachment(
+            db=db,
+            file=file,
+            parent_type="project",
+            parent_id=project_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        return AttachmentResponse.model_validate(document)
+
+    except Exception:
+        raise
+
+
 @router.get("/", response_model=List[ProjectListResponse])
 def list_projects(
     *,
@@ -73,6 +103,56 @@ def list_projects(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}",
         )
+
+
+@router.get("/{project_id}/documentos")
+async def get_project_document(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+) -> Optional[AttachmentResponse]:
+    """
+    Obtener el documento adjunto del proyecto.
+
+    Solo el propietario del proyecto puede acceder al documento.
+    Retorna None si no hay documento adjunto.
+    """
+    try:
+        attachment = attachment_service.get_attachment_by_parent(
+            db=db,
+            parent_type="project",
+            parent_id=project_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        if attachment:
+            return AttachmentResponse.model_validate(attachment)
+        return None
+
+    except Exception:
+        raise
+
+
+@router.get("/{project_id}/phases")
+async def get_project_with_phases(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.get_project_with_phases(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
