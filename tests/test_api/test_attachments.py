@@ -33,13 +33,6 @@ class TestAttachmentEndpoints:
             "password": "Test123456",
             "phone_number": phone,
         }
-        """Helper para crear un usuario de prueba y hacer login"""
-        user_data = {
-            "email": email,
-            "full_name": "Test User",
-            "password": "Test123456",
-            "phone_number": phone,
-        }
 
         # Crear usuario
         register_response = client.post("/api/v1/auth/register", json=user_data)
