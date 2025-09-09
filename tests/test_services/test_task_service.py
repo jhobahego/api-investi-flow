@@ -437,26 +437,6 @@ class TestTaskService:
     #                 )
 
     #         # Actualizar las posiciones
-    #         for order in task_orders:
-    #             task_id = order.get("id")
-    #             new_position = order.get("position")
-    #             task = task_dict[task_id]  # type: ignore
-    #             setattr(task, "position", new_position)
-
-    #         db.commit()
-
-    #         # Retornar las tareas ordenadas
-    #         return task_repository.get_tasks_by_phase(db=db, phase_id=phase_id)
-
-    #     except HTTPException:
-    #         raise
-    #     except Exception as e:
-    #         db.rollback()
-    #         raise HTTPException(
-    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             detail=f"Error al reordenar las tareas: {str(e)}",
-    #         )
-
     def test_delete_task_success(self, db_session, test_user, test_task):
         """Probar eliminación exitosa de tarea"""
         result = task_service.delete_task(
