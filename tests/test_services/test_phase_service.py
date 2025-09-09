@@ -82,6 +82,7 @@ class TestPhaseService:
             name="Nueva Fase",
             position=0,
             project_id=test_project.id,
+            color=None,
         )
 
         result = phase_service.create_phase(
@@ -91,8 +92,8 @@ class TestPhaseService:
         )
 
         assert result is not None
-        assert result.name == "Nueva Fase"
-        assert result.position == 0
+        assert result.name == "Nueva Fase"  # type: ignore
+        assert result.position == 0  # type: ignore
         assert result.project_id == test_project.id
 
     def test_create_phase_project_not_found(self, db_session, test_user):
@@ -101,6 +102,7 @@ class TestPhaseService:
             name="Fase Sin Proyecto",
             position=0,
             project_id=999999,
+            color=None,
         )
 
         with pytest.raises(HTTPException) as exc_info:
@@ -111,7 +113,10 @@ class TestPhaseService:
             )
 
         assert exc_info.value.status_code == 404
-        assert "no encontrado" in exc_info.value.detail
+        assert (
+            "Proyecto no encontrado o no tienes permisos para acceder a él"
+            in exc_info.value.detail
+        )
 
     def test_get_phase_by_id_success(self, db_session, test_user, test_phase):
         """Probar obtener fase por ID exitosamente"""
@@ -134,11 +139,11 @@ class TestPhaseService:
             )
 
         assert exc_info.value.status_code == 404
-        assert "no encontrada" in exc_info.value.detail
+        assert "Fase no encontrada" in exc_info.value.detail
 
     def test_update_phase_success(self, db_session, test_user, test_phase):
         """Probar actualización exitosa de fase"""
-        update_data = PhaseUpdate(name="Fase Actualizada")
+        update_data = PhaseUpdate(name="Fase Actualizada", color="#FFFFFF", position=1)
 
         result = phase_service.update_phase(
             db=db_session,
@@ -149,11 +154,13 @@ class TestPhaseService:
 
         assert result is not None
         assert result.id == test_phase.id
-        assert result.name == "Fase Actualizada"
+        assert result.name == "Fase Actualizada"  # type: ignore
+        assert result.color == "#FFFFFF"  # type: ignore
+        assert result.position == 1  # type: ignore
 
     def test_update_phase_not_found(self, db_session, test_user):
         """Probar actualización de fase inexistente"""
-        update_data = PhaseUpdate(name="Fase Inexistente")
+        update_data = PhaseUpdate(name="Fase Inexistente", color="#000000", position=2)
 
         with pytest.raises(HTTPException) as exc_info:
             phase_service.update_phase(
@@ -164,7 +171,7 @@ class TestPhaseService:
             )
 
         assert exc_info.value.status_code == 404
-        assert "no encontrada" in exc_info.value.detail
+        assert "Fase no encontrada" in exc_info.value.detail
 
     def test_delete_phase_success(self, db_session, test_user, test_phase):
         """Probar eliminación exitosa de fase"""
@@ -192,7 +199,7 @@ class TestPhaseService:
             )
 
         assert exc_info.value.status_code == 404
-        assert "no encontrada" in exc_info.value.detail
+        assert "Fase no encontrada" in exc_info.value.detail
 
     def test_reorder_phases_success(self, db_session, test_user, test_project):
         """Probar reordenamiento exitoso de fases"""
@@ -203,6 +210,7 @@ class TestPhaseService:
                 name=f"Fase {i + 1}",
                 position=i,
                 project_id=test_project.id,
+                color=None,
             )
             phase = phase_service.create_phase(
                 db=db_session,
@@ -240,7 +248,10 @@ class TestPhaseService:
             )
 
         assert exc_info.value.status_code == 404
-        assert "no encontrado" in exc_info.value.detail
+        assert (
+            "Proyecto no encontrado o no tienes permisos para acceder a él"
+            in exc_info.value.detail
+        )
 
     def test_get_phase_tasks(self, db_session, test_user, test_phase):
         """Probar obtener tareas de una fase"""
@@ -261,4 +272,4 @@ class TestPhaseService:
             )
 
         assert exc_info.value.status_code == 404
-        assert "no encontrada" in exc_info.value.detail
+        assert "Fase no encontrada" in exc_info.value.detail
