@@ -1,8 +1,9 @@
 from typing import List, Optional
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.models.phase import Phase
+from app.models.task import Task
 from app.repositories.base import BaseRepository
 from app.schemas.phase import PhaseCreate, PhaseUpdate
 
@@ -117,15 +118,9 @@ class PhaseRepository(BaseRepository[Phase, PhaseCreate, PhaseUpdate]):
 
         db.commit()
 
-    def get_phase_tasks(self, db: Session, phase_id: int) -> List[Phase]:
+    def get_phase_tasks(self, db: Session, phase_id: int) -> List[Task]:
         """Obtener todas las tareas de una fase específica"""
-        return (
-            db.query(Phase)
-            .filter(Phase.id == phase_id)
-            .options(joinedload(Phase.tasks))
-            .order_by(Phase.position)
-            .all()
-        )
+        return db.query(Task).filter(Task.phase_id == phase_id).all()
 
 
 # Instancia global del repositorio

@@ -1,9 +1,10 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.phase import Phase
+from app.models.task import Task
 from app.repositories.phase_repository import phase_repository
 from app.repositories.project_repository import project_repository
 from app.schemas.phase import PhaseCreate, PhaseUpdate
@@ -85,7 +86,7 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
                 detail="Ha ocurrido un error al crear la fase",
             )
 
-    def get_phase_tasks(self, db: Session, phase_id: int) -> List[Phase]:
+    def get_phase_tasks(self, db: Session, phase_id: int) -> List[Task]:
         """
         Obtener todas las tareas de una fase.
 
@@ -107,7 +108,9 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
 
             # Verificar que un usuario solo pueda obtener tareas de fases de sus propios proyectos
             phase = phase_repository.get_phase_by_project_and_id(
-                db=db, phase_id=phase_id, project_id=phase.project_id  # type: ignore
+                db=db,
+                phase_id=phase_id,
+                project_id=phase.project_id,  # type: ignore
             )
             if not phase:
                 raise HTTPException(
