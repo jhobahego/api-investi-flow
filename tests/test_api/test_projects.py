@@ -495,3 +495,80 @@ class TestProjectEndpoints:
         response = client.post("/api/v1/proyectos/", json=project_data, headers=headers)
 
         assert response.status_code == 422
+
+    def test_search_projects_by_name(self):
+        """Probar búsqueda de proyectos por nombre"""
+        headers, _ = self.create_test_user_and_login()
+
+        # Crear algunos proyectos
+        projects_data = [
+            {"name": "Proyecto Alpha"},
+            {"name": "Proyecto Beta"},
+            {"name": "Proyecto Gamma"},
+            {"name": "Otro Proyecto"},
+        ]
+
+        for project_data in projects_data:
+            response = client.post(
+                "/api/v1/proyectos/", json=project_data, headers=headers
+            )
+            assert response.status_code == 201
+
+        # Buscar proyectos que contengan 'Proyec'
+        response = client.get("/api/v1/proyectos/search?query=Proyec", headers=headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 4
+
+    def test_search_projects_no_match(self):
+        """Probar búsqueda de proyectos con ningún resultado"""
+        headers, _ = self.create_test_user_and_login()
+
+        # Crear algunos proyectos
+        projects_data = [
+            {"name": "Proyecto Alpha"},
+            {"name": "Proyecto Beta"},
+        ]
+
+        for project_data in projects_data:
+            response = client.post(
+                "/api/v1/proyectos/", json=project_data, headers=headers
+            )
+            assert response.status_code == 201
+
+        # Buscar proyectos que contengan 'Delta' (no existe)
+        response = client.get("/api/v1/proyectos/search?query=Delta", headers=headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 0
+
+    def test_search_projects_case_insensitive(self):
+        """Probar búsqueda de proyectos por nombre sin sensibilidad a mayúsculas/minúsculas"""
+        headers, _ = self.create_test_user_and_login()
+
+        # Crear algunos proyectos
+        projects_data = [
+            {"name": "Proyecto Alpha"},
+            {"name": "proyecto beta"},
+            {"name": "PROYECTO Gamma"},
+        ]
+
+        for project_data in projects_data:
+            response = client.post(
+                "/api/v1/proyectos/", json=project_data, headers=headers
+            )
+            assert response.status_code == 201
+
+        # Buscar proyectos que contengan 'proyecto' en diferentes casos
+        response = client.get(
+            "/api/v1/proyectos/search?query=proyecto", headers=headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 3

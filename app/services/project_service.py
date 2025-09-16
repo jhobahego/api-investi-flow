@@ -224,6 +224,33 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 detail=f"Error al obtener las fases del proyecto: {str(e)}",
             )
 
+    def search_user_projects_by_name(
+        self, db: Session, query: str, owner_id: int
+    ) -> list[type[Project]]:
+        """
+        Buscar proyectos por nombre que contengan una subcadena específica.
+
+        Args:
+            db: Sesión de base de datos
+            search: Subcadena a buscar en el nombre del proyecto
+            owner_id: ID del usuario propietario
+
+        Returns:
+            Lista de proyectos que coinciden con la búsqueda
+        """
+        try:
+            projects = project_repository.search_projects_by_name(
+                db=db, query=query, owner_id=owner_id
+            )
+            return projects
+
+        except Exception as e:
+            print(f"Error al buscar los proyectos: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al buscar los proyectos",
+            )
+
 
 # Instancia global del servicio
 project_service = ProjectService()
