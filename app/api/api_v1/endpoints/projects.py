@@ -105,6 +105,25 @@ def list_projects(
         )
 
 
+@router.get("/search", response_model=List[ProjectListResponse])
+async def list_user_projects_by_search(
+    *,
+    db: Session = Depends(get_db),
+    query: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    Listar todos los proyectos del usuario autenticado que coincidan con la búsqueda.
+
+    Retorna una lista con todos los proyectos creados por el usuario actual,
+    cuyo nombre contenga la subcadena de búsqueda, ordenados por fecha de creación (más recientes primero).
+    Si no se proporciona una cadena de búsqueda, se retornan todos los proyectos del usuario.
+    """
+    return project_service.search_user_projects_by_name(
+        db=db, query=query, owner_id=current_user.id  # type: ignore
+    )
+
+
 @router.get("/{project_id}/documentos")
 async def get_project_document(
     *,

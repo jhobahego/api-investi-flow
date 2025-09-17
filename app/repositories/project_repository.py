@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -62,6 +62,19 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             .filter(Project.id == project_id)
             .options(joinedload(Project.phases))
             .first()
+        )
+
+    def search_projects_by_name(
+        self, db: Session, query: str, owner_id: int
+    ) -> list[type[Project]]:
+        """Buscar proyectos por nombre que contengan una subcadena específica"""
+        return (
+            db.query(self.model)
+            .filter(
+                Project.name.ilike(f"%{query}%"),
+                Project.owner_id == owner_id,
+            )
+            .all()
         )
 
 
