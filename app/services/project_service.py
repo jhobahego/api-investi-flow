@@ -232,7 +232,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
         Args:
             db: Sesión de base de datos
-            search: Subcadena a buscar en el nombre del proyecto
+            query: Subcadena a buscar en el nombre del proyecto
             owner_id: ID del usuario propietario
 
         Returns:
