@@ -137,8 +137,9 @@ async def move_task_to_phase(
     Args:
         db (Session): Sesión de base de datos proporcionada por la dependencia.
         task_id (int): ID de la tarea que se desea mover.
-        new_phase_id (int): ID de la nueva fase a la que se moverá la tarea.
-        new_position (Optional[int]): Posición en la que se va a ubicar en la nueva fase (opcional).
+        data_to_update (TaskDataToMovePhase): Objeto que contiene los datos para mover la tarea, incluyendo:
+            - new_phase_id (int): ID de la nueva fase a la que se moverá la tarea.
+            - new_position (Optional[int]): Posición en la que se va a ubicar en la nueva fase (opcional).
         current_user (User): El usuario actualmente autenticado.
 
     Returns:
