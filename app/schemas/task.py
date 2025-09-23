@@ -139,3 +139,8 @@ class TaskDetailResponse(TaskResponse):
     attachment: Optional["AttachmentResponse"] = None
 
     model_config = {"from_attributes": True}
+
+
+class TaskDataToMovePhase(BaseModel):
+    new_phase_id: int
+    new_position: Optional[int]

@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas import TaskCreate, TaskResponse, TaskUpdate
 from app.schemas.attachment import AttachmentResponse
+from app.schemas.task import TaskCreate, TaskDataToMovePhase, TaskResponse, TaskUpdate
 from app.services import task_service
 from app.services.attachment_service import attachment_service
 
@@ -119,6 +119,39 @@ async def get_tasks_by_phase(
     return task_service.get_phase_tasks(
         db=db,
         phase_id=phase_id,
+        owner_id=user_id,  # type: ignore
+    )
+
+
+@router.put("/{task_id}/mover")
+async def move_task_to_phase(
+    *,
+    db: Session = Depends(get_db),
+    task_id: int,
+    data_to_update: TaskDataToMovePhase,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Mueve una tarea a una nueva fase y posición dentro de esa fase.
+
+    Args:
+        db (Session): Sesión de base de datos proporcionada por la dependencia.
+        task_id (int): ID de la tarea que se desea mover.
+        new_phase_id (int): ID de la nueva fase a la que se moverá la tarea.
+        new_position (Optional[int]): Posición en la que se va a ubicar en la nueva fase (opcional).
+        current_user (User): El usuario actualmente autenticado.
+
+    Returns:
+        TaskResponse: Los datos de la tarea movida.
+    """
+    user_id = current_user.id
+    new_phase_id = data_to_update.new_phase_id
+    new_position = data_to_update.new_position
+    return task_service.move_task_to_phase(
+        db=db,
+        task_id=task_id,
+        new_phase_id=new_phase_id,
+        new_position=new_position,
         owner_id=user_id,  # type: ignore
     )
 
