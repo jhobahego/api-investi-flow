@@ -570,6 +570,93 @@ class TestTaskEndpoints:
 
         assert response.status_code == 422
 
+    def test_move_task_to_phase_success(self):
+        """Probar mover tarea a otra fase exitosamente"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase1 = self.create_test_phase(headers, project["id"])
+        phase2 = self.create_test_phase(headers, project["id"])
+
+        # Crear tarea en la primera fase
+        task_data = {
+            "title": "Tarea para Mover",
+            "position": 0,
+            "phase_id": phase1["id"],
+        }
+
+        create_response = client.post(
+            "/api/v1/tareas/", json=task_data, headers=headers
+        )
+        assert create_response.status_code == 201
+        task_response = create_response.json()
+        task_id = task_response["id"]
+
+        # Mover la tarea a la segunda fase
+        move_data = {
+            "new_phase_id": phase2["id"],
+            "new_position": 0,
+        }
+
+        response = client.put(
+            f"/api/v1/tareas/{task_id}/mover", json=move_data, headers=headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == task_id
+        assert data["phase_id"] == phase2["id"]
+        assert data["position"] == 0
+
+        # Verificar que la tarea ya no está en la primera fase
+        get_response_phase1 = client.get(
+            f"/api/v1/fases/{phase1['id']}/tareas", headers=headers
+        )
+        assert get_response_phase1.status_code == 200
+        tasks_phase1 = get_response_phase1.json()
+        task_exists = any(task["id"] == task_id for task in tasks_phase1)
+        assert not task_exists
+
+        # Verificar que la tarea está en la segunda fase
+        get_response_phase2 = client.get(
+            f"/api/v1/fases/{phase2['id']}/tareas", headers=headers
+        )
+        assert get_response_phase2.status_code == 200
+        tasks_phase2 = get_response_phase2.json()
+        task_exists = any(task["id"] == task_id for task in tasks_phase2)
+        assert task_exists
+
+    def test_move_task_to_invalid_phase(self):
+        """Probar mover tarea a fase inexistente"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+
+        # Crear tarea en la fase
+        task_data = {
+            "title": "Tarea para Mover a Fase Inválida",
+            "position": 0,
+            "phase_id": phase["id"],
+        }
+
+        create_response = client.post(
+            "/api/v1/tareas/", json=task_data, headers=headers
+        )
+        assert create_response.status_code == 201
+        task_id = create_response.json()["id"]
+
+        # Intentar mover la tarea a una fase inexistente
+        move_data = {
+            "new_phase_id": 999999,
+            "new_position": 0,
+        }
+
+        response = client.put(
+            f"/api/v1/tareas/{task_id}/mover", json=move_data, headers=headers
+        )
+
+        assert response.status_code == 404
+        assert "Fase destino no encontrada" in response.json()["detail"]
+
     def test_delete_task_success(self):
         """Probar eliminación exitosa de tarea"""
         headers, user_id = self.create_test_user_and_login()
