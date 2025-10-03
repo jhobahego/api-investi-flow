@@ -1,6 +1,9 @@
+from pathlib import Path
 from typing import Any, List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
@@ -120,7 +123,9 @@ async def list_user_projects_by_search(
     Si no se proporciona una cadena de búsqueda, se retornan todos los proyectos del usuario.
     """
     return project_service.search_user_projects_by_name(
-        db=db, query=query, owner_id=current_user.id  # type: ignore
+        db=db,
+        query=query,  # type: ignore
+        owner_id=current_user.id,  # type: ignore
     )
 
 
@@ -259,4 +264,92 @@ def delete_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}",
+        )
+
+
+@router.get("/{project_id}/descargar-documento")
+async def download_project_document(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    """
+    Descargar el documento adjunto del proyecto.
+
+    Solo el propietario del proyecto puede descargar el documento.
+    El archivo se descargará con su nombre original y el navegador
+    iniciará automáticamente la descarga.
+
+    Returns:
+        FileResponse: Archivo para descargar
+
+    Raises:
+        HTTPException 404: Si el proyecto no existe o no tiene documento adjunto
+        HTTPException 403: Si el usuario no tiene permisos
+        HTTPException 500: Si hay un error al acceder al archivo
+    """
+    try:
+        # Obtener el documento adjunto del proyecto
+        attachment = attachment_service.get_attachment_by_parent(
+            db=db,
+            parent_type="project",
+            parent_id=project_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        if not attachment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El proyecto no tiene un documento adjunto",
+            )
+
+        # Verificar que el archivo existe en el sistema de archivos
+        file_path = Path(str(attachment.file_path))
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El archivo no se encuentra en el sistema",
+            )
+
+        # Determinar el tipo MIME según la extensión del archivo
+        media_type_map = {
+            ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc": "application/msword",
+        }
+
+        file_extension = file_path.suffix.lower()
+        media_type = media_type_map.get(file_extension, "application/octet-stream")
+
+        # Obtener el nombre del archivo como string
+        filename = str(attachment.file_name)
+
+        # Encodear el nombre del archivo para el header según RFC 5987
+        # Esto maneja correctamente caracteres especiales (acentos, ñ, etc.)
+        filename_encoded = quote(filename)
+
+        # Crear el header Content-Disposition con ambos formatos para máxima compatibilidad
+        # filename* es el estándar RFC 5987 para caracteres no-ASCII
+        content_disposition = (
+            f"attachment; "
+            f'filename="{filename.encode("ascii", "ignore").decode("ascii")}"; '
+            f"filename*=UTF-8''{filename_encoded}"
+        )
+
+        # Retornar el archivo para descarga
+        return FileResponse(
+            path=str(file_path),
+            filename=filename,
+            media_type=media_type,
+            headers={"Content-Disposition": content_disposition},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error al descargar el documento: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al descargar el documento",
         )
