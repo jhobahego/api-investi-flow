@@ -78,3 +78,4 @@ celerybeat.pid
 # Copilot and AI
 agents/
 agents/*.md
+.github/instructions/*
