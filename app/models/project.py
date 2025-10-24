@@ -68,4 +68,7 @@ class Project(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    conversations = relationship(
+        "Conversation", back_populates="project", cascade="all, delete-orphan"
+    )
     # bibliographies = relationship("Bibliography", back_populates="project", cascade="all, delete-orphan")
