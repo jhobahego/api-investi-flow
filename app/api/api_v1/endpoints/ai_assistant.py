@@ -8,16 +8,25 @@ from app.core.ai_prompts import format_project_context
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.repositories.conversation_repository import (
+    conversation_repository,
+    message_repository,
+)
 from app.schemas.ai import (
     AIErrorResponse,
     BibliographyRequest,
     BibliographyResponse,
-    ChatRequest,
-    ChatResponse,
     CitationRequest,
     CitationResponse,
     SuggestionRequest,
     SuggestionResponse,
+)
+from app.schemas.conversation import (
+    ChatWithHistoryRequest,
+    ChatWithHistoryResponse,
+    ConversationListResponse,
+    ConversationResponse,
+    ConversationUpdate,
 )
 from app.services.ai_service import AIServiceError, ModelNotAvailableError, ai_service
 from app.services.project_service import project_service
@@ -152,155 +161,6 @@ async def generate_suggestion(
 
     except Exception as e:
         logger.error(f"Error inesperado en sugerencias: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "internal_error",
-                "message": "Error interno del servidor",
-                "details": {},
-            },
-        )
-
-
-# =============================================================================
-# ENDPOINT: CHAT CONTEXTUAL
-# =============================================================================
-
-
-@router.post(
-    "/proyectos/{project_id}/ia/chat",
-    response_model=ChatResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Chat con asistente IA contextual al proyecto",
-    description="""
-    Inicia o continúa una conversación con el asistente de IA en el contexto de un proyecto.
-
-    El asistente tiene acceso a:
-    - Información del proyecto (nombre, descripción, tipo de investigación, objetivos)
-    - Historial de la conversación
-    - Documentos adjuntos al proyecto (en desarrollo)
-    - Bibliografía del proyecto (en desarrollo)
-
-    El modelo utilizado depende del plan del usuario:
-    - Plan Estudiante: gemini-2.0-flash-exp
-    - Plan Investigador: gemini-2.0-flash-exp
-    - Plan Profesional: gemini-2.0-flash-thinking-exp (más potente)
-
-    **Nota**: Por ahora usa el plan Profesional con el modelo más potente.
-    """,
-    responses={
-        200: {
-            "description": "Respuesta del asistente generada exitosamente",
-            "model": ChatResponse,
-        },
-        401: {"description": "No autorizado - Token inválido o ausente"},
-        403: {"description": "Sin acceso al proyecto o funcionalidad no disponible"},
-        404: {"description": "Proyecto no encontrado"},
-        500: {
-            "description": "Error interno del servidor o del servicio de IA",
-            "model": AIErrorResponse,
-        },
-    },
-)
-async def chat_with_ai(
-    project_id: int,
-    request: ChatRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> ChatResponse:
-    """
-    Conversación con el asistente de IA en el contexto de un proyecto.
-
-    Args:
-        project_id: ID del proyecto
-        request: Mensaje y historial del chat
-        current_user: Usuario autenticado
-        db: Sesión de base de datos
-
-    Returns:
-        ChatResponse: Respuesta del asistente y modelo utilizado
-
-    Raises:
-        HTTPException: Si hay errores de autorización, proyecto no encontrado o del servicio de IA
-    """
-    try:
-        logger.info(
-            f"Usuario {current_user.email} inicia chat en proyecto {project_id}"
-        )
-
-        # Verificar que el proyecto existe y el usuario tiene acceso
-        project = project_service.get_user_project_by_id(
-            db,
-            project_id=project_id,
-            owner_id=current_user.id,  # type: ignore
-        )
-        if not project:
-            logger.warning(f"Proyecto {project_id} no encontrado o usuario sin acceso")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Proyecto no encontrado o sin acceso",
-            )
-
-        # TODO: Determinar el plan del usuario desde la base de datos
-        # Por ahora usamos el plan profesional (modelo más potente) para chat
-        user_plan = UserPlan.PROFESIONAL
-
-        # Formatear contexto del proyecto
-        project_context = format_project_context(
-            project_name=project.name,  # type: ignore
-            description=project.description,  # type: ignore
-            research_type=project.research_type,  # type: ignore
-            # TODO: Agregar resumen de documentos adjuntos
-        )
-
-        # Convertir historial al formato esperado por el servicio
-        history_dict = [msg.model_dump() for msg in request.history]
-
-        # Llamar al servicio de IA
-        response_text, model_used = await ai_service.chat(
-            message=request.message,
-            history=history_dict,
-            project_context=project_context,
-            plan=user_plan,
-        )
-
-        logger.info(f"Respuesta de chat generada exitosamente con modelo {model_used}")
-
-        return ChatResponse(
-            response=response_text,
-            model_used=model_used,
-        )
-
-    except HTTPException:
-        # Re-raise HTTPException para que FastAPI las maneje correctamente
-        raise
-
-    except ModelNotAvailableError as e:
-        logger.warning(
-            f"Modelo no disponible para usuario {current_user.email}: {str(e)}"
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error": "feature_not_available",
-                "message": str(e),
-                "details": {"feature": "chat", "plan": user_plan.value},
-            },
-        )
-
-    except AIServiceError as e:
-        logger.error(f"Error del servicio de IA: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "ai_service_error",
-                "message": "Error al generar la respuesta del chat. Por favor, intenta nuevamente.",
-                "details": {"error_type": type(e).__name__},
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Error inesperado en chat: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -642,6 +502,369 @@ async def search_bibliography(
         logger.error(
             f"Error inesperado en búsqueda bibliográfica: {str(e)}", exc_info=True
         )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_error",
+                "message": "Error interno del servidor",
+                "details": {},
+            },
+        )
+
+
+# =============================================================================
+# ENDPOINTS: CONVERSACIONES CON HISTORIAL PERSISTENTE
+# =============================================================================
+
+
+@router.get(
+    "/proyectos/{project_id}/conversaciones",
+    response_model=list[ConversationListResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar conversaciones de un proyecto",
+    description="""
+    Obtiene todas las conversaciones de chat del usuario en un proyecto específico.
+
+    Las conversaciones se retornan ordenadas por última actualización (más recientes primero).
+    Incluye un preview del último mensaje y el contador de mensajes.
+    """,
+)
+async def list_conversations(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ConversationListResponse]:
+    """Lista todas las conversaciones del usuario en un proyecto."""
+    try:
+        # Verificar acceso al proyecto
+        project = project_service.get_user_project_by_id(
+            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o sin acceso",
+            )
+
+        # Obtener conversaciones
+        conversations = conversation_repository.get_by_project_and_user(
+            db, project_id=project_id, user_id=current_user.id  # type: ignore
+        )
+
+        # Construir respuesta con metadata
+        response = []
+        for conv in conversations:
+            message_count = conversation_repository.get_message_count(db, conv.id)
+            last_message = message_repository.get_last_message(db, conv.id)
+
+            response.append(
+                ConversationListResponse(
+                    id=conv.id,
+                    project_id=conv.project_id,
+                    user_id=conv.user_id,
+                    title=conv.title,
+                    created_at=conv.created_at,
+                    updated_at=conv.updated_at,
+                    message_count=message_count,
+                    last_message_preview=last_message.content[:100]
+                    if last_message
+                    else None,
+                )
+            )
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listando conversaciones: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al obtener conversaciones",
+        )
+
+
+@router.get(
+    "/proyectos/{project_id}/conversaciones/{conversation_id}",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Obtener una conversación con todos sus mensajes",
+)
+async def get_conversation(
+    project_id: int,
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ConversationResponse:
+    """Obtiene una conversación específica con todo su historial de mensajes."""
+    try:
+        # Verificar acceso al proyecto
+        project = project_service.get_user_project_by_id(
+            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o sin acceso",
+            )
+
+        # Obtener conversación con mensajes
+        conversation = conversation_repository.get_with_messages(
+            db, conversation_id=conversation_id, user_id=current_user.id  # type: ignore
+        )
+
+        if not conversation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversación no encontrada",
+            )
+
+        return ConversationResponse.model_validate(conversation)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo conversación: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al obtener conversación",
+        )
+
+
+@router.patch(
+    "/proyectos/{project_id}/conversaciones/{conversation_id}",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Actualizar título de conversación",
+)
+async def update_conversation(
+    project_id: int,
+    conversation_id: int,
+    data: ConversationUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ConversationResponse:
+    """Actualiza el título de una conversación."""
+    try:
+        if not data.title:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El título no puede estar vacío",
+            )
+
+        # Verificar acceso al proyecto
+        project = project_service.get_user_project_by_id(
+            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o sin acceso",
+            )
+
+        # Actualizar conversación
+        conversation = conversation_repository.update_title(
+            db, conversation_id=conversation_id, user_id=current_user.id, new_title=data.title  # type: ignore
+        )
+
+        if not conversation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversación no encontrada",
+            )
+
+        # Recargar con mensajes
+        conversation = conversation_repository.get_with_messages(
+            db, conversation_id=conversation_id, user_id=current_user.id  # type: ignore
+        )
+
+        return ConversationResponse.model_validate(conversation)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error actualizando conversación: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al actualizar conversación",
+        )
+
+
+@router.delete(
+    "/proyectos/{project_id}/conversaciones/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar una conversación",
+)
+async def delete_conversation(
+    project_id: int,
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Elimina una conversación y todos sus mensajes."""
+    try:
+        # Verificar acceso al proyecto
+        project = project_service.get_user_project_by_id(
+            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o sin acceso",
+            )
+
+        # Eliminar conversación
+        deleted = conversation_repository.delete(db, id=conversation_id)
+
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversación no encontrada",
+            )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error eliminando conversación: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al eliminar conversación",
+        )
+
+
+@router.post(
+    "/proyectos/{project_id}/chat",
+    response_model=ChatWithHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Chat con historial persistente",
+    description="""
+    Envía un mensaje al asistente IA y guarda el historial en la base de datos.
+
+    - Si se proporciona `conversation_id`, continúa la conversación existente.
+    - Si NO se proporciona, crea una nueva conversación automáticamente.
+    - El historial completo se guarda en la base de datos.
+    - Retorna la respuesta del asistente y el ID de la conversación.
+    """,
+)
+async def chat_with_persistent_history(
+    project_id: int,
+    request: ChatWithHistoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatWithHistoryResponse:
+    """
+    Chat con el asistente IA con historial persistente.
+    """
+    try:
+        logger.info(
+            f"Usuario {current_user.email} envía mensaje en proyecto {project_id}"
+        )
+
+        # Verificar acceso al proyecto
+        project = project_service.get_user_project_by_id(
+            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+        )
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o sin acceso",
+            )
+
+        # Obtener o crear conversación
+        if request.conversation_id:
+            # Continuar conversación existente
+            conversation = conversation_repository.get_with_messages(
+                db, conversation_id=request.conversation_id, user_id=current_user.id  # type: ignore
+            )
+            if not conversation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversación no encontrada",
+                )
+        else:
+            # Crear nueva conversación
+            title = request.title or "Nueva conversación"
+            conversation = conversation_repository.create_conversation(
+                db, project_id=project_id, user_id=current_user.id, title=title  # type: ignore
+            )
+
+        # Guardar mensaje del usuario
+        user_message = message_repository.create_message(
+            db,
+            conversation_id=conversation.id,
+            role="user",
+            content=request.message,
+        )
+
+        # Construir historial para el servicio de IA
+        history_for_ai = [
+            {"role": msg.role, "content": msg.content}
+            for msg in conversation.messages
+            if msg.id != user_message.id  # Excluir el mensaje recién creado
+        ]
+
+        # Formatear contexto del proyecto
+        project_context = format_project_context(
+            project_name=project.name,  # type: ignore
+            description=project.description,  # type: ignore
+            research_type=project.research_type,  # type: ignore
+        )
+
+        # Llamar al servicio de IA
+        user_plan = UserPlan.PROFESIONAL  # TODO: Obtener del usuario
+        response_text, model_used = await ai_service.chat(
+            message=request.message,
+            history=history_for_ai,
+            project_context=project_context,
+            plan=user_plan,
+        )
+
+        # Guardar respuesta del asistente
+        assistant_message = message_repository.create_message(
+            db,
+            conversation_id=conversation.id,
+            role="model",
+            content=response_text,
+            model_used=model_used,
+        )
+
+        logger.info(
+            f"Chat completado: conversación {conversation.id}, modelo {model_used}"
+        )
+
+        return ChatWithHistoryResponse(
+            response=response_text,
+            model_used=model_used,
+            conversation_id=conversation.id,
+            message_id=assistant_message.id,
+        )
+
+    except HTTPException:
+        raise
+    except ModelNotAvailableError as e:
+        logger.warning(f"Modelo no disponible: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "feature_not_available",
+                "message": str(e),
+                "details": {"feature": "chat"},
+            },
+        )
+    except AIServiceError as e:
+        logger.error(f"Error del servicio de IA: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "ai_service_error",
+                "message": "Error al generar respuesta. Intenta nuevamente.",
+                "details": {"error_type": type(e).__name__},
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error inesperado en chat: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
