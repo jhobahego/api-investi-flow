@@ -55,6 +55,11 @@ INSTRUCCIONES CRÍTICAS:
 - Respeta el contexto, temática y argumentación del documento completo
 - Si mencionas datos, teorías o conceptos, PRIORIZA citar las fuentes de la bibliografía disponible
 - Limita tu sugerencia a 2-4 oraciones relevantes y coherentes
+- PUEDES usar saltos de línea (\n\n) cuando sea necesario para:
+  * Iniciar un nuevo párrafo si el contexto lo requiere
+  * Agregar un nuevo título o subtítulo si estás comenzando una nueva sección
+  * Crear listas o enumeraciones cuando sea apropiado
+  * Mantener la estructura lógica del documento
 
 CONSIDERACIONES SOBRE CITACIONES:
 - Si la sugerencia requiere fundamentación, incluye citas en formato (Autor, Año)
@@ -63,18 +68,29 @@ CONSIDERACIONES SOBRE CITACIONES:
 - Mantén las citas integradas naturalmente en el texto
 
 FORMATO DE RESPUESTA:
-- Texto plano continuo que se concatena directamente después del texto del usuario
-- Sin saltos de línea innecesarios al inicio o final
+- Texto plano que se concatena directamente después del texto del usuario
+- Puedes incluir saltos de línea (\n\n) cuando inicies nuevos párrafos o secciones
+- Sin saltos de línea innecesarios al inicio (la primera palabra debe ser contenido)
 - Sin formato markdown (nada de **, ##, etc.)
 - Sin comillas alrededor de la sugerencia
 - Las citas deben estar en formato (Autor, Año) dentro del texto
 
-EJEMPLO 1 (CON bibliografía disponible):
+EJEMPLO 1 (Continuación en la misma línea):
 Documento: "La inteligencia artificial ha transformado la educación superior mediante"
 Bibliografía: ["García & López (2023) - IA en educación", "Smith (2022) - Aprendizaje adaptativo"]
 Tu respuesta: "la implementación de sistemas de aprendizaje adaptativo que personalizan la experiencia del estudiante (García & López, 2023). Estas tecnologías permiten identificar necesidades individuales y ajustar el contenido en tiempo real (Smith, 2022)."
 
-EJEMPLO 2 (SIN bibliografía específica):
+EJEMPLO 2 (Nueva sección con salto de línea):
+Documento: "...y así concluye el análisis de los resultados obtenidos."
+Bibliografía: []
+Tu respuesta: "\n\nConclusiones\n\nBasándonos en los hallazgos presentados, podemos determinar que la hipótesis inicial se confirma parcialmente. Los datos sugieren la necesidad de realizar estudios adicionales para validar estas observaciones."
+
+EJEMPLO 3 (Nuevo párrafo con salto de línea):
+Documento: "El primer factor identificado fue la motivación intrínseca."
+Bibliografía: []
+Tu respuesta: "\n\nEl segundo factor relevante corresponde a las condiciones ambientales del entorno de aprendizaje. Este aspecto ha demostrado tener un impacto significativo en el desempeño académico de los estudiantes."
+
+EJEMPLO 4 (Continuación sin salto de línea):
 Documento: "Los resultados del experimento muestran que"
 Bibliografía: []
 Tu respuesta: "existe una correlación significativa entre las variables estudiadas. Este hallazgo sugiere que el fenómeno observado podría estar influenciado por factores externos no controlados en el diseño inicial."
