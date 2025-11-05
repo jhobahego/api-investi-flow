@@ -6,6 +6,11 @@ from .attachment import (
     AttachmentResponse,
     AttachmentUpdate,
 )
+from .document import (
+    DocumentContentResponse,
+    DocumentPagesResponse,
+    DocumentPreviewResponse,
+)
 from .phase import (
     PhaseBase,
     PhaseCreate,
@@ -71,6 +76,10 @@ __all__ = [
     "AttachmentUpdate",
     "AttachmentResponse",
     "AttachmentListResponse",
+    # Document schemas
+    "DocumentContentResponse",
+    "DocumentPagesResponse",
+    "DocumentPreviewResponse",
     # Token schemas
     "Token",
     "TokenData",
