@@ -92,6 +92,13 @@ make docker-logs    # Ver logs en tiempo real
 - `PUT /api/v1/proyectos/{id}` - Actualizar proyecto
 - `DELETE /api/v1/proyectos/{id}` - Eliminar proyecto
 
+### Documentos 📄 **NUEVO**
+- `GET /api/v1/documentos/{id}/extract-content` - Extraer contenido de .docx a HTML
+- `GET /api/v1/documentos/{id}/preview` - Vista previa de documento
+
+### Asistente IA 🤖
+- `POST /api/v1/ia/sugerencias` - Obtener sugerencias de IA para documentos
+
 ## 📚 Documentación Completa
 
 - **🔧 [Configuración Detallada](docs/SETUP.md)** - Instalación paso a paso, prerrequisitos
