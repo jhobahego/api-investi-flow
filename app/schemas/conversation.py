@@ -1,6 +1,7 @@
 """
 Schemas para conversaciones y mensajes de chat
 """
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -33,7 +34,7 @@ class MessageResponse(MessageBase):
     )
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
 
 
 # =============================================================================
@@ -115,3 +116,5 @@ class ChatWithHistoryResponse(BaseModel):
     model_used: str = Field(..., description="Modelo de IA utilizado")
     conversation_id: int = Field(..., description="ID de la conversación")
     message_id: int = Field(..., description="ID del mensaje de respuesta")
+
+    model_config = {"protected_namespaces": ()}
