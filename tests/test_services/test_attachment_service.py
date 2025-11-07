@@ -540,12 +540,18 @@ class TestAttachmentService:
             assert content == b"test content"
 
     def test_save_file_error(self):
-        """Probar error al guardar archivo"""
-        mock_file = self.create_mock_upload_file()
-        invalid_path = "/invalid/path/that/does/not/exist/test.pdf"
+        """Probar error al guardar archivo cuando falla la escritura"""
+        from unittest.mock import mock_open, patch
 
-        with pytest.raises(Exception, match="Error al guardar archivo"):
-            self.service._save_file(mock_file, invalid_path)
+        mock_file = self.create_mock_upload_file()
+        file_path = "/tmp/test.pdf"
+
+        # Simular error de escritura
+        with patch("builtins.open", mock_open()) as mock_file_open:
+            mock_file_open.side_effect = IOError("Disk full")
+
+            with pytest.raises(Exception, match="Error al guardar archivo"):
+                self.service._save_file(mock_file, file_path)
 
     def test_validate_parent_entity_invalid_type(self):
         """Probar validación con tipo de entidad inválido"""
