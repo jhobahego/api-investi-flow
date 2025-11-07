@@ -60,6 +60,7 @@ class ChatResponse(BaseModel):
     model_used: str = Field(..., description="Modelo de IA utilizado")
 
     model_config = {
+        "protected_namespaces": (),
         "json_schema_extra": {
             "examples": [
                 {
@@ -67,7 +68,7 @@ class ChatResponse(BaseModel):
                     "model_used": "gemini-2.0-flash-thinking-exp",
                 }
             ]
-        }
+        },
     }
 
 
@@ -138,6 +139,7 @@ class SuggestionResponse(BaseModel):
     model_used: str = Field(..., description="Modelo de IA utilizado")
 
     model_config = {
+        "protected_namespaces": (),
         "json_schema_extra": {
             "examples": [
                 {
@@ -145,7 +147,7 @@ class SuggestionResponse(BaseModel):
                     "model_used": "gemini-2.0-flash-lite",
                 }
             ]
-        }
+        },
     }
 
 
@@ -260,6 +262,7 @@ class CitationResponse(BaseModel):
     model_used: str = Field(..., description="Modelo de IA utilizado")
 
     model_config = {
+        "protected_namespaces": (),
         "json_schema_extra": {
             "examples": [
                 {
@@ -267,7 +270,7 @@ class CitationResponse(BaseModel):
                     "model_used": "gemini-2.0-flash-exp",
                 }
             ]
-        }
+        },
     }
 
 
@@ -343,6 +346,7 @@ class BibliographyResponse(BaseModel):
     total_found: int = Field(..., description="Número total de fuentes encontradas")
 
     model_config = {
+        "protected_namespaces": (),
         "json_schema_extra": {
             "examples": [
                 {
@@ -351,7 +355,7 @@ class BibliographyResponse(BaseModel):
                     "total_found": 10,
                 }
             ]
-        }
+        },
     }
 
 
