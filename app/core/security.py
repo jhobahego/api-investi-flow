@@ -35,7 +35,9 @@ def create_access_token(
 
 def create_refresh_token(subject: Union[str, Any]) -> str:
     """Crear un token de actualización JWT"""
-    expire = datetime.now(timezone.utc) + timedelta(days=7)  # 7 días de expiración
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
 
     secret_key = settings.SECRET_KEY

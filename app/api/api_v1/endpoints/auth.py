@@ -80,6 +80,56 @@ def login_access_token(
     }
 
 
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(
+    db: Session = Depends(get_db), refresh_token: str = Depends(oauth2_scheme)
+) -> Any:
+    """
+    Refrescar el access token usando un refresh token válido.
+
+    - **refresh_token**: Refresh token válido en el header Authorization
+    """
+    try:
+        # Verificar el refresh token
+        email = verify_token(refresh_token)
+        if email is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token inválido o expirado",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Verificar que el usuario existe y está activo
+        user = user_service.get_user_by_email(db, email=email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuario no encontrado",
+            )
+        if not bool(user.is_active):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+            )
+
+        # Crear nuevos tokens
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+        return {
+            "access_token": create_access_token(
+                user.email, expires_delta=access_token_expires
+            ),
+            "refresh_token": create_refresh_token(user.email),
+            "token_type": "bearer",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al refrescar el token: {str(e)}",
+        )
+
+
 @router.post("/logout")
 def logout_user(token: str = Depends(oauth2_scheme)):
     """
