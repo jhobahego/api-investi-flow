@@ -116,7 +116,9 @@ class DocumentExtractionService:
             # Procesar párrafos
             if element.tag.endswith("p"):
                 para = Paragraph(element, document)
-                html_parts.append(DocumentExtractionService._paragraph_to_html(para))
+                html_parts.append(
+                    DocumentExtractionService._paragraph_to_html(para, document)
+                )
             # Procesar tablas
             elif element.tag.endswith("tbl"):
                 table = Table(element, document)
@@ -126,7 +128,10 @@ class DocumentExtractionService:
         if not html_parts or all(part.strip() == "" for part in html_parts):
             return "<p></p>"
 
-        return "".join(html_parts)
+        # Agrupar elementos de lista consecutivos
+        grouped_html = DocumentExtractionService._group_list_items(html_parts)
+
+        return "".join(grouped_html)
 
     @staticmethod
     def _convert_document_to_pages(document: Document) -> List[str]:
@@ -146,7 +151,7 @@ class DocumentExtractionService:
             # Procesar párrafos
             if element.tag.endswith("p"):
                 para = Paragraph(element, document)
-                html = DocumentExtractionService._paragraph_to_html(para)
+                html = DocumentExtractionService._paragraph_to_html(para, document)
                 if html.strip():
                     all_elements.append(html)
             # Procesar tablas
@@ -160,12 +165,15 @@ class DocumentExtractionService:
         if not all_elements:
             return ["<p></p>"]
 
+        # Agrupar elementos de lista consecutivos
+        grouped_elements = DocumentExtractionService._group_list_items(all_elements)
+
         # Dividir en páginas
         pages: List[str] = []
         current_page: List[str] = []
         current_length = 0
 
-        for element_html in all_elements:
+        for element_html in grouped_elements:
             # Calcular longitud de texto del elemento
             element_text = re.sub(r"<[^>]+>", "", element_html)
             element_length = len(element_text)
@@ -190,15 +198,16 @@ class DocumentExtractionService:
         return pages if pages else ["<p></p>"]
 
     @staticmethod
-    def _paragraph_to_html(paragraph: Paragraph) -> str:
+    def _paragraph_to_html(paragraph: Paragraph, document: Document) -> str:
         """
         Convierte un párrafo de docx a HTML con formato
 
         Args:
             paragraph: Objeto Paragraph de python-docx
+            document: Objeto Document de python-docx (para acceder al numbering)
 
         Returns:
-            str: HTML del párrafo
+            str: HTML del párrafo con metadata de tipo de lista si aplica
         """
         text = paragraph.text.strip()
 
@@ -231,11 +240,19 @@ class DocumentExtractionService:
                 )
 
                 if ilvl is not None and numId is not None:
-                    # Determinar si es lista ordenada o no ordenada
-                    # (simplificación: se usa ul por defecto)
-                    return (
-                        f"<li>{DocumentExtractionService._format_runs(paragraph)}</li>"
+                    # Obtener el valor del numId
+                    num_id_val = numId.get(
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val"
                     )
+                    ilvl_val = ilvl.get(
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val"
+                    )
+                    # Determinar si es lista ordenada o no ordenada
+                    list_type = DocumentExtractionService._detect_list_type(
+                        document, num_id_val, ilvl_val
+                    )
+                    # Usar atributo data-list-type para identificar el tipo de lista
+                    return f"<li data-list-type='{list_type}' data-num-id='{num_id_val}'>{DocumentExtractionService._format_runs(paragraph)}</li>"
 
         # Párrafo normal
         return f"<p>{DocumentExtractionService._format_runs(paragraph)}</p>"
@@ -291,6 +308,145 @@ class DocumentExtractionService:
 
         html.append("</table>")
         return "".join(html)
+
+    @staticmethod
+    def _detect_list_type(
+        document: Document, num_id: Optional[str], ilvl: Optional[str]
+    ) -> str:
+        """
+        Detecta si una lista es ordenada (ol) o no ordenada (ul) accediendo al numbering.xml
+
+        Args:
+            document: Objeto Document de python-docx
+            num_id: ID de numeración del párrafo
+            ilvl: Nivel de indentación
+
+        Returns:
+            str: 'ol' para lista ordenada, 'ul' para lista no ordenada
+        """
+        # Intentar acceder al numbering part para obtener el numFmt real
+        try:
+            if (
+                hasattr(document.part, "numbering_part")
+                and document.part.numbering_part
+            ):
+                numbering_part = document.part.numbering_part
+                numbering_element = numbering_part._element
+                ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+                if num_id:
+                    # Buscar el elemento num con el numId
+                    num = numbering_element.find(f'.//{ns}num[@{ns}numId="{num_id}"]')
+
+                    if num is not None:
+                        # Obtener abstractNumId
+                        abstract_num_id_el = num.find(f".//{ns}abstractNumId")
+                        if abstract_num_id_el is not None:
+                            abstract_num_id = abstract_num_id_el.get(f"{ns}val")
+
+                            # Buscar abstractNum
+                            abstract_num = numbering_element.find(
+                                f'.//{ns}abstractNum[@{ns}abstractNumId="{abstract_num_id}"]'
+                            )
+
+                            if abstract_num is not None:
+                                # Buscar el nivel correcto (por defecto nivel 0)
+                                lvl_val = ilvl if ilvl else "0"
+                                lvl_el = abstract_num.find(
+                                    f'.//{ns}lvl[@{ns}ilvl="{lvl_val}"]'
+                                )
+
+                                if lvl_el is not None:
+                                    # Buscar numFmt
+                                    num_fmt = lvl_el.find(f".//{ns}numFmt")
+                                    if num_fmt is not None:
+                                        fmt_val = num_fmt.get(f"{ns}val")
+
+                                        # Formatos numéricos = lista ordenada
+                                        if fmt_val in [
+                                            "decimal",
+                                            "upperRoman",
+                                            "lowerRoman",
+                                            "upperLetter",
+                                            "lowerLetter",
+                                            "decimalZero",
+                                            "ordinal",
+                                        ]:
+                                            return "ol"
+                                        # Formatos de viñetas = lista no ordenada
+                                        elif fmt_val == "bullet":
+                                            return "ul"
+        except Exception as e:
+            # Log error but continue with fallback
+            import logging
+
+            logging.warning(f"Error detecting list type from numbering.xml: {e}")
+
+        # Fallback: Por defecto asumir lista con viñetas (más seguro que asumir numerada)
+        return "ul"
+
+    @staticmethod
+    def _group_list_items(html_elements: List[str]) -> List[str]:
+        """
+        Agrupa elementos <li> consecutivos dentro de etiquetas <ul> o <ol>
+
+        Args:
+            html_elements: Lista de elementos HTML
+
+        Returns:
+            List[str]: Lista de elementos HTML con listas agrupadas
+        """
+        grouped = []
+        current_list_items = []
+        current_list_type = None
+
+        for element in html_elements:
+            # Verificar si es un elemento de lista
+            if element.startswith("<li"):
+                # Extraer el tipo de lista del atributo data-list-type
+                match = re.search(r"data-list-type='(\w+)'", element)
+                list_type = match.group(1) if match else "ul"
+
+                # Si cambia el tipo de lista, cerrar la lista anterior
+                if current_list_type is not None and current_list_type != list_type:
+                    # Cerrar lista anterior
+                    grouped.append(f"<{current_list_type}>")
+                    for item in current_list_items:
+                        # Remover el atributo data-list-type antes de agregar
+                        clean_item = re.sub(r"\s*data-list-type='[^']*'", "", item)
+                        grouped.append(clean_item)
+                    grouped.append(f"</{current_list_type}>")
+                    current_list_items = []
+
+                # Agregar item a la lista actual
+                current_list_items.append(element)
+                current_list_type = list_type
+            else:
+                # No es un elemento de lista
+                # Si había elementos de lista acumulados, cerrar la lista
+                if current_list_items:
+                    grouped.append(f"<{current_list_type}>")
+                    for item in current_list_items:
+                        # Remover el atributo data-list-type antes de agregar
+                        clean_item = re.sub(r"\s*data-list-type='[^']*'", "", item)
+                        grouped.append(clean_item)
+                    grouped.append(f"</{current_list_type}>")
+                    current_list_items = []
+                    current_list_type = None
+
+                # Agregar el elemento normal
+                grouped.append(element)
+
+        # Si quedan elementos de lista al final, cerrar la lista
+        if current_list_items:
+            grouped.append(f"<{current_list_type}>")
+            for item in current_list_items:
+                # Remover el atributo data-list-type antes de agregar
+                clean_item = re.sub(r"\s*data-list-type='[^']*'", "", item)
+                grouped.append(clean_item)
+            grouped.append(f"</{current_list_type}>")
+
+        return grouped
 
     @staticmethod
     def get_document_preview(file_path: str, max_chars: int = 200) -> str:
