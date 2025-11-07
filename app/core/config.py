@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # JWT Security
     SECRET_KEY: Optional[str] = None  # Set via environment variable or .env file
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # 15 minutos para mayor seguridad
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 1  # 24 horas
 
     # CORS
     BACKEND_CORS_ORIGIN: str = "http://localhost:5173"
