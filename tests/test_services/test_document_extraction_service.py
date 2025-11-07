@@ -157,7 +157,12 @@ class TestDocumentExtractionService:
         mock_run.underline = False
         mock_para.runs = [mock_run]
 
-        result = DocumentExtractionService._paragraph_to_html(mock_para)
+        # Mock para el documento (no es una lista)
+        mock_para._element.pPr = None
+
+        mock_doc = MagicMock()
+
+        result = DocumentExtractionService._paragraph_to_html(mock_para, mock_doc)
 
         assert result == "<h1>Título Principal</h1>"
 
@@ -174,7 +179,12 @@ class TestDocumentExtractionService:
         mock_run.underline = False
         mock_para.runs = [mock_run]
 
-        result = DocumentExtractionService._paragraph_to_html(mock_para)
+        # Mock para el documento (no es una lista)
+        mock_para._element.pPr = None
+
+        mock_doc = MagicMock()
+
+        result = DocumentExtractionService._paragraph_to_html(mock_para, mock_doc)
 
         assert result == "<h2>Subtítulo</h2>"
 
@@ -185,7 +195,12 @@ class TestDocumentExtractionService:
         mock_para.style.name = "Normal"
         mock_para.runs = []
 
-        result = DocumentExtractionService._paragraph_to_html(mock_para)
+        # Mock para el documento (no es una lista)
+        mock_para._element.pPr = None
+
+        mock_doc = MagicMock()
+
+        result = DocumentExtractionService._paragraph_to_html(mock_para, mock_doc)
 
         assert result == "<p></p>"
 
