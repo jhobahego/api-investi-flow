@@ -673,3 +673,101 @@ class TestPhaseEndpoints:
         # PUT reordenar fases
         response = client.put("/api/v1/fases/project/1/reorder", json=[])
         assert response.status_code == 401
+
+    def test_get_project_with_phases_includes_phases(self):
+        """Verificar que el endpoint retorne las fases en la respuesta"""
+        headers, _ = self.create_test_user_and_login()
+
+        # 1. Crear proyecto
+        project = self.create_test_project(headers)
+        project_id = project["id"]
+
+        # 2. Crear fase
+        phase_data = {
+            "name": "Fase 1",
+            "position": 0,
+            "project_id": project_id,
+            "color": "#FF0000",
+        }
+        phase_res = client.post("/api/v1/fases/", json=phase_data, headers=headers)
+        assert phase_res.status_code == 201
+        phase_id = phase_res.json()["id"]
+
+        # 3. Obtener proyecto con fases
+        response = client.get(f"/api/v1/proyectos/{project_id}/phases", headers=headers)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "phases" in data
+        assert isinstance(data["phases"], list)
+        assert len(data["phases"]) == 1
+        assert data["phases"][0]["id"] == phase_id
+        assert data["phases"][0]["name"] == "Fase 1"
+
+    def test_get_project_with_phases_etag_changes(self):
+        """Verificar que el ETag cambie cuando se agregan fases"""
+        headers, _ = self.create_test_user_and_login()
+
+        # 1. Crear proyecto
+        project = self.create_test_project(headers)
+        project_id = project["id"]
+
+        # 2. Obtener ETag inicial
+        res1 = client.get(f"/api/v1/proyectos/{project_id}/phases", headers=headers)
+        etag1 = res1.headers.get("ETag")
+        assert etag1 is not None
+
+        # 3. Agregar fase
+        phase_data = {"name": "Fase Nueva", "position": 0, "project_id": project_id}
+        client.post("/api/v1/fases/", json=phase_data, headers=headers)
+
+        # 4. Obtener nuevo ETag
+        res2 = client.get(f"/api/v1/proyectos/{project_id}/phases", headers=headers)
+        etag2 = res2.headers.get("ETag")
+
+        assert etag2 != etag1
+
+    def test_phases_are_sorted_by_position(self):
+        """Verificar que las fases se retornen ordenadas por posición"""
+        headers, _ = self.create_test_user_and_login()
+
+        # 1. Crear proyecto
+        project = self.create_test_project(headers)
+        project_id = project["id"]
+
+        # 2. Crear fases en orden inverso de posición
+        # Fase 3 (pos 2)
+        client.post(
+            "/api/v1/fases/",
+            json={"name": "Fase 3", "position": 2, "project_id": project_id},
+            headers=headers,
+        )
+        # Fase 1 (pos 0)
+        client.post(
+            "/api/v1/fases/",
+            json={"name": "Fase 1", "position": 0, "project_id": project_id},
+            headers=headers,
+        )
+        # Fase 2 (pos 1)
+        client.post(
+            "/api/v1/fases/",
+            json={"name": "Fase 2", "position": 1, "project_id": project_id},
+            headers=headers,
+        )
+
+        # 3. Obtener proyecto con fases
+        response = client.get(f"/api/v1/proyectos/{project_id}/phases", headers=headers)
+        assert response.status_code == 200
+
+        phases = response.json()["phases"]
+        assert len(phases) == 3
+
+        # Verificar orden
+        assert phases[0]["position"] == 0
+        assert phases[0]["name"] == "Fase 1"
+
+        assert phases[1]["position"] == 1
+        assert phases[1]["name"] == "Fase 2"
+
+        assert phases[2]["position"] == 2
+        assert phases[2]["name"] == "Fase 3"
