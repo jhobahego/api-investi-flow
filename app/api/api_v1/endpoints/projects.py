@@ -1,9 +1,21 @@
+import hashlib
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
@@ -15,6 +27,7 @@ from app.schemas.project import (
     ProjectListResponse,
     ProjectResponse,
     ProjectUpdate,
+    ProjectWithPhasesResponse,
 )
 from app.services.attachment_service import attachment_service
 from app.services.project_service import project_service
@@ -158,25 +171,74 @@ async def get_project_document(
         raise
 
 
-@router.get("/{project_id}/phases")
+@router.get("/{project_id}/phases", response_model=ProjectWithPhasesResponse)
 async def get_project_with_phases(
     *,
     db: Session = Depends(get_db),
     project_id: int,
     current_user: User = Depends(get_current_user),
+    request: Request,
+    response: Response,
 ):
+    """
+    Obtener proyecto con fases, implementando caché HTTP con ETags.
+
+    El cliente puede enviar 'If-None-Match' header con el ETag previo.
+    Si el contenido no ha cambiado, retorna 304 Not Modified.
+    """
     try:
-        return project_service.get_project_with_phases(
+        project_data = project_service.get_project_with_phases(
             db=db,
             project_id=project_id,
             owner_id=current_user.id,  # type: ignore
         )
 
+        if not project_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado"
+            )
+
+        # Generar ETag basado en updated_at del proyecto y el estado de las fases
+        # Como las fases no tienen updated_at, usamos una combinación robusta de sus propiedades
+        phases_info = ""
+        if project_data.phases:
+            # Ordenar por ID para consistencia y crear un string único basado en IDs y posiciones
+            # Esto detectará cambios en orden, creación y eliminación
+            phase_details = sorted([(p.id, p.position) for p in project_data.phases])
+            phases_str = json.dumps(phase_details, separators=(",", ":"))
+            phases_info = f"-phases-{hashlib.md5(phases_str.encode()).hexdigest()}"
+
+        etag_value = (
+            f"{project_data.id}-{project_data.updated_at.timestamp()}{phases_info}"
+        )
+        etag = hashlib.md5(etag_value.encode()).hexdigest()
+
+        # Verificar si el cliente tiene la versión cacheada
+        client_etag = request.headers.get("If-None-Match")
+        if client_etag and client_etag.strip('"') == etag:
+            # El contenido no ha cambiado
+            return Response(status_code=status.HTTP_304_NOT_MODIFIED)
+
+        # Agregar headers de caché
+        response.headers["ETag"] = f'"{etag}"'
+        response.headers[
+            "Cache-Control"
+        ] = "no-cache, must-revalidate"  # Forzar revalidación siempre
+        response.headers["Last-Modified"] = project_data.updated_at.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT"
+        )
+
+        return project_data
+
     except HTTPException:
         raise
 
-    except Exception:
-        raise
+    except Exception as e:
+        print(f"Error in get_project_with_phases: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al obtener el proyecto: {str(e)}",
+        )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

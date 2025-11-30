@@ -106,7 +106,7 @@ class ProjectWithPhasesResponse(ProjectResponse):
     """Esquema de respuesta para proyecto con sus fases"""
 
     # Se importarán dinámicamente para evitar imports circulares
-    phases: List["PhaseResponse"] = Field(default_factory=list)
+    phases: List["PhaseListResponse"] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
