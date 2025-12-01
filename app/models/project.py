@@ -60,7 +60,10 @@ class Project(Base):
     # Relaciones
     owner = relationship("User", back_populates="projects")
     phases = relationship(
-        "Phase", back_populates="project", cascade="all, delete-orphan"
+        "Phase",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="Phase.position",
     )
     attachment = relationship(
         "Attachment",
