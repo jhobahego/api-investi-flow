@@ -236,6 +236,7 @@ def format_project_context(
     research_type: str | None = None,
     objectives: str | None = None,
     documents_summary: str | None = None,
+    bibliographies_summary: str | None = None,
 ) -> str:
     """
     Formatea el contexto del proyecto para incluirlo en el prompt del chat.
@@ -246,6 +247,7 @@ def format_project_context(
         research_type: Tipo de investigación
         objectives: Objetivos del proyecto
         documents_summary: Resumen de documentos adjuntos
+        bibliographies_summary: Resumen de bibliografías del proyecto
 
     Returns:
         str: Contexto formateado
@@ -262,9 +264,14 @@ def format_project_context(
         context_parts.append(f"**Objetivos**: {objectives}")
 
     if documents_summary:
-        context_parts.append(f"**Documentos del Proyecto**: {documents_summary}")
+        context_parts.append(
+            f"**Contenido del Documento Principal**: {documents_summary}"
+        )
 
-    return "\n".join(context_parts)
+    if bibliographies_summary:
+        context_parts.append(f"**Bibliografía del Proyecto**: {bibliographies_summary}")
+
+    return "\n\n".join(context_parts)
 
 
 def format_bibliography_context(bibliography_list: list[dict] | None = None) -> str:

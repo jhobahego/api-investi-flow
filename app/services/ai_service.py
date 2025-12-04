@@ -170,10 +170,6 @@ class AIService:
             # Construir el contenido con historial y mensaje actual
             contents = []
 
-            # Agregar el system instruction como primer mensaje del sistema
-            if not history:
-                contents.append(system_prompt)
-
             # Agregar historial formateado
             for msg in history:
                 contents.append(msg.get("content", ""))
@@ -181,11 +177,18 @@ class AIService:
             # Agregar mensaje actual
             contents.append(message)
 
-            # Generar respuesta
+            # Generar respuesta usando system_instruction
             response = self.client.models.generate_content(
                 model=model_name,
                 contents=contents,
-                config=config,
+                config=types.GenerateContentConfig(
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    top_k=config.top_k,
+                    max_output_tokens=config.max_output_tokens,
+                    safety_settings=config.safety_settings,
+                    system_instruction=system_prompt,
+                ),
             )
 
             logger.info(f"Chat completado exitosamente con {model_name}")
@@ -327,7 +330,12 @@ class AIService:
             raise AIServiceError(f"Error al formatear la cita: {str(e)}")
 
     async def search_bibliography(
-        self, query: str, max_results: int = 10, plan: UserPlan = UserPlan.INVESTIGADOR
+        self,
+        query: str,
+        max_results: int = 10,
+        plan: UserPlan = UserPlan.INVESTIGADOR,
+        project_context: str | None = None,
+        search_context: str | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """
         Busca fuentes bibliográficas relevantes usando Grounding con Google Search.
@@ -336,6 +344,8 @@ class AIService:
             query: Consulta de búsqueda
             max_results: Número máximo de resultados
             plan: Plan del usuario (por defecto INVESTIGADOR)
+            project_context: Contexto del proyecto formateado
+            search_context: Contexto adicional de búsqueda
 
         Returns:
             tuple[list[dict], str]: (lista de fuentes encontradas, nombre del modelo usado)
@@ -349,15 +359,26 @@ class AIService:
                 AIFeature.BIBLIOGRAPHY, plan, use_grounding=True
             )
 
+            # Construir contexto adicional
+            context_str = ""
+            if project_context:
+                context_str += f"\nCONTEXTO DEL PROYECTO:\n{project_context}"
+            if search_context:
+                context_str += (
+                    f"\nCONTEXTO DE LA BÚSQUEDA (Documento actual):\n{search_context}"
+                )
+
             # Construir el prompt optimizado para Grounding EN ESPAÑOL
             # Asegurar que la búsqueda siempre se realice en español
             prompt = f"""{BIBLIOGRAPHY_SYSTEM_PROMPT}
+            {context_str}
 
             CONSULTA DE BÚSQUEDA: {query}
             NÚMERO DE RESULTADOS SOLICITADOS: {max_results}
             IDIOMA REQUERIDO: Español (castellano) - OBLIGATORIO
+            FORMATO DE RESPUESTA: ÚNICAMENTE JSON VÁLIDO. NO INCLUIR BLOQUES DE CÓDIGO MARKDOWN (```json ... ```). NO INCLUIR HTML.
 
-            INSTRUCCIÓN FINAL: Busca en Google SOLO fuentes académicas en español sobre la consulta anterior. Si la consulta está en inglés u otro idioma, tradúcela primero al español para realizar la búsqueda.
+            INSTRUCCIÓN FINAL: Busca en Google SOLO fuentes académicas en español sobre la consulta anterior, utilizando el contexto proporcionado para refinar la relevancia. Si la consulta está en inglés u otro idioma, tradúcela primero al español para realizar la búsqueda.
 
             FUENTES EN ESPAÑOL ENCONTRADAS (JSON):"""
 

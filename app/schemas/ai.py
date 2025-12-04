@@ -291,6 +291,13 @@ class BibliographyRequest(BaseModel):
     max_results: int = Field(
         10, description="Número máximo de resultados a devolver", ge=1, le=20
     )
+    project_context: dict[str, Any] | None = Field(
+        None, description="Contexto del proyecto (nombre, descripción, tipo)"
+    )
+    search_context: str | None = Field(
+        None,
+        description="Contexto adicional de búsqueda (ej. párrafo actual del documento)",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -298,6 +305,12 @@ class BibliographyRequest(BaseModel):
                 {
                     "query": "inteligencia artificial en educación superior",
                     "max_results": 10,
+                    "project_context": {
+                        "name": "Impacto de la IA",
+                        "description": "Investigación sobre...",
+                        "research_type": "cualitativa",
+                    },
+                    "search_context": "En el capítulo de metodología se busca...",
                 }
             ]
         }

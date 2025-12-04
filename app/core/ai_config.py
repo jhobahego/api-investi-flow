@@ -25,21 +25,21 @@ class AIFeature(str, Enum):
 PLAN_MODELS: dict[UserPlan, dict[AIFeature, str | None]] = {
     UserPlan.ESTUDIANTE: {
         AIFeature.CHAT: "gemini-2.0-flash-exp",  # Modelo rápido para chat básico
-        AIFeature.SUGGESTIONS: "gemini-2.0-flash-lite",  # Modelo ultraligero para sugerencias
+        AIFeature.SUGGESTIONS: "gemini-2.0-flash-lite-001",  # Modelo ultraligero para sugerencias
         AIFeature.CITATIONS: "gemini-2.0-flash-exp",  # Flash para formateo de citas
         AIFeature.BIBLIOGRAPHY: None,  # No disponible en plan gratuito
     },
     UserPlan.INVESTIGADOR: {
         AIFeature.CHAT: "gemini-2.0-flash-exp",  # Flash para conversaciones
-        AIFeature.SUGGESTIONS: "gemini-2.0-flash-lite",  # Lite para autocompletado rápido
+        AIFeature.SUGGESTIONS: "gemini-2.0-flash-lite-001",  # Lite para autocompletado rápido
         AIFeature.CITATIONS: "gemini-2.0-flash-exp",  # Flash para citas
         AIFeature.BIBLIOGRAPHY: "gemini-2.0-flash-exp",  # Flash con Grounding para búsqueda
     },
     UserPlan.PROFESIONAL: {
-        AIFeature.CHAT: "gemini-2.0-flash-thinking-exp",  # Thinking para análisis profundo
+        AIFeature.CHAT: "gemini-2.0-flash-lite-001",  # Thinking para análisis profundo
         AIFeature.SUGGESTIONS: "gemini-2.0-flash-exp",  # Flash para sugerencias rápidas
         AIFeature.CITATIONS: "gemini-2.0-flash-exp",  # Flash para formateo preciso
-        AIFeature.BIBLIOGRAPHY: "gemini-2.0-flash-thinking-exp",  # Thinking con Grounding
+        AIFeature.BIBLIOGRAPHY: "gemini-2.0-flash-lite-001",  # Thinking con Grounding
     },
 }
 
@@ -113,7 +113,7 @@ MODEL_GENERATION_CONFIG: dict[str, dict[str, float | int]] = {
         "top_k": 40,
         "max_output_tokens": 2048,
     },
-    "gemini-2.0-flash-thinking-exp": {
+    "gemini-2.0-flash-lite-001": {
         "temperature": 0.8,
         "top_p": 0.95,
         "top_k": 40,
