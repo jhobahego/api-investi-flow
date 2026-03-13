@@ -23,23 +23,25 @@ class AIFeature(str, Enum):
 # =============================================================================
 
 PLAN_MODELS: dict[UserPlan, dict[AIFeature, str | None]] = {
+    # Por el momento se va a usar el mismo modelo para todos los planes, por temas de costo y pruebas de la plataforma.
+    # Modelo a usar: gemini-2.5-flash-lite
     UserPlan.ESTUDIANTE: {
-        AIFeature.CHAT: "gemini-2.0-flash-exp",  # Modelo rápido para chat básico
-        AIFeature.SUGGESTIONS: "gemini-2.0-flash-lite-001",  # Modelo ultraligero para sugerencias
-        AIFeature.CITATIONS: "gemini-2.0-flash-exp",  # Flash para formateo de citas
+        AIFeature.CHAT: "gemini-2.5-flash-lite",  # Modelo rápido para chat básico
+        AIFeature.SUGGESTIONS: "gemini-2.5-flash-lite",  # Modelo ultraligero para sugerencias
+        AIFeature.CITATIONS: "gemini-2.5-flash-lite",  # Flash para formateo de citas
         AIFeature.BIBLIOGRAPHY: None,  # No disponible en plan gratuito
     },
     UserPlan.INVESTIGADOR: {
-        AIFeature.CHAT: "gemini-2.0-flash-exp",  # Flash para conversaciones
-        AIFeature.SUGGESTIONS: "gemini-2.0-flash-lite-001",  # Lite para autocompletado rápido
-        AIFeature.CITATIONS: "gemini-2.0-flash-exp",  # Flash para citas
-        AIFeature.BIBLIOGRAPHY: "gemini-2.0-flash-exp",  # Flash con Grounding para búsqueda
+        AIFeature.CHAT: "gemini-2.5-flash-lite",  # Flash para conversaciones
+        AIFeature.SUGGESTIONS: "gemini-2.5-flash-lite",  # Lite para autocompletado rápido
+        AIFeature.CITATIONS: "gemini-2.5-flash-lite",  # Flash para citas
+        AIFeature.BIBLIOGRAPHY: "gemini-2.5-flash-lite",  # Modelo mas potente con Grounding Search para la feature mas potente.
     },
     UserPlan.PROFESIONAL: {
-        AIFeature.CHAT: "gemini-2.0-flash-lite-001",  # Thinking para análisis profundo
-        AIFeature.SUGGESTIONS: "gemini-2.0-flash-exp",  # Flash para sugerencias rápidas
-        AIFeature.CITATIONS: "gemini-2.0-flash-exp",  # Flash para formateo preciso
-        AIFeature.BIBLIOGRAPHY: "gemini-2.0-flash-lite-001",  # Thinking con Grounding
+        AIFeature.CHAT: "gemini-2.5-flash-lite",  # Thinking para análisis profundo
+        AIFeature.SUGGESTIONS: "gemini-2.5-flash-lite",  # Flash para sugerencias rápidas
+        AIFeature.CITATIONS: "gemini-2.5-flash-lite",  # Flash para formateo preciso
+        AIFeature.BIBLIOGRAPHY: "gemini-2.5-flash-lite",  # Modelo mas potente con Grounding Search para la feature mas potente.
     },
 }
 
