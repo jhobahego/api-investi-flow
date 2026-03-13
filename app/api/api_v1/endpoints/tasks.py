@@ -1,6 +1,9 @@
+from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
@@ -204,8 +207,77 @@ async def delete_task(
         None
     """
     user_id = current_user.id
+    user_id = current_user.id
     return task_service.delete_task(
         db=db,
         task_id=task_id,
         owner_id=user_id,  # type: ignore
     )
+
+
+@router.get("/{task_id}/descargar-documento")
+async def download_task_document(
+    *,
+    db: Session = Depends(get_db),
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    """
+    Descargar el documento adjunto de la tarea.
+
+    Solo el propietario del proyecto al que pertenece la tarea puede descargar el documento.
+    """
+    try:
+        attachment = attachment_service.get_attachment_by_parent(
+            db=db,
+            parent_type="task",
+            parent_id=task_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        if not attachment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La tarea no tiene un documento adjunto",
+            )
+
+        file_path = Path(str(attachment.file_path))
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El archivo no se encuentra en el sistema",
+            )
+
+        media_type_map = {
+            ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc": "application/msword",
+        }
+
+        file_extension = file_path.suffix.lower()
+        media_type = media_type_map.get(file_extension, "application/octet-stream")
+
+        filename = str(attachment.file_name)
+        filename_encoded = quote(filename)
+
+        content_disposition = (
+            f"attachment; "
+            f'filename="{filename.encode("ascii", "ignore").decode("ascii")}"; '
+            f"filename*=UTF-8''{filename_encoded}"
+        )
+
+        return FileResponse(
+            path=str(file_path),
+            filename=filename,
+            media_type=media_type,
+            headers={"Content-Disposition": content_disposition},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error al descargar el documento: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al descargar el documento",
+        )
