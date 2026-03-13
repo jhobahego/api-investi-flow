@@ -497,14 +497,24 @@ class AIService:
             list[dict]: Lista de fuentes parseadas
         """
         try:
+            import re
+
             # Limpiar la respuesta para obtener solo el JSON
             response_text = response_text.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
 
-            sources = json.loads(response_text.strip())
+            # Buscar el contenido entre corchetes (arreglo JSON)
+            match = re.search(r"\[.*\]", response_text, re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                sources = json.loads(json_str)
+            else:
+                # Fallback tradicional si no se encuentra el arreglo con regex
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:]
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
+
+                sources = json.loads(response_text.strip())
 
             if not isinstance(sources, list):
                 raise ValueError("La respuesta no es una lista válida")
@@ -512,7 +522,9 @@ class AIService:
             return sources[:max_results]
 
         except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Error al parsear respuesta JSON: {str(e)}")
+            logger.warning(
+                f"Error al parsear respuesta JSON: {str(e)}\nRespuesta: {response_text[:200]}"
+            )
             return []
 
     def _infer_source_type(self, url: str) -> str:
