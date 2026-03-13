@@ -37,3 +37,11 @@ class DocumentPreviewResponse(BaseModel):
     max_chars: int = Field(..., description="Número máximo de caracteres")
 
     model_config = {"from_attributes": True}
+
+
+class DocumentUpdateContent(BaseModel):
+    """Esquema para actualizar el contenido de un documento (guardar el editor a .docx)"""
+
+    pages: List[str] = Field(
+        ..., description="Lista de páginas HTML a guardar en el documento"
+    )
