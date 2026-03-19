@@ -5,30 +5,36 @@ Esta guía te llevará paso a paso para configurar el entorno de desarrollo de I
 ## 📋 Prerrequisitos
 
 ### Para Desarrollo Local
+
 - **Python 3.11+** (con pip)
 - **PostgreSQL 12+**
 - **Git**
 - **Make** (para usar comandos automatizados)
 
 ### Para Docker (Recomendado)
+
 - **Docker Engine 20.10+**
 - **Docker Compose V2** (incluido con Docker Desktop)
 
 ## 🐳 Instalación de Docker
 
 ### 🐧 Linux
+
 - Seguir la [guía oficial de Docker Desktop para Linux](https://docs.docker.com/desktop/setup/install/linux/)
 - O instalar Docker Engine: [Instrucciones para Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
 
 ### 🪟 Windows
+
 - Descargar [Docker Desktop para Windows](https://docs.docker.com/desktop/install/windows-install/)
 - Seguir la [guía de instalación oficial](https://docs.docker.com/desktop/setup/install/windows-install/)
 
 ### 🍎 macOS
+
 - Descargar [Docker Desktop para Mac](https://docs.docker.com/desktop/install/mac-install/)
 - Seguir la [guía de instalación oficial](https://docs.docker.com/desktop/setup/install/mac-install/)
 
 ### ✅ Verificar instalación Docker
+
 ```bash
 docker --version
 docker compose version
@@ -39,12 +45,14 @@ docker compose version
 ### Opción 1: Usando Make (Recomendado) ⚡
 
 #### 1. Clonar el repositorio
+
 ```bash
 git clone https://github.com/jhobahego/api-investi-flow.git
 cd investi-flow-api
 ```
 
 #### 2. Crear entorno virtual
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
@@ -52,6 +60,7 @@ source .venv/bin/activate  # Linux/Mac
 ```
 
 #### 3. Configuración automática
+
 ```bash
 # Ver todos los comandos disponibles
 make help
@@ -64,12 +73,14 @@ make install
 ```
 
 #### 4. Configurar variables de entorno
+
 ```bash
 cp .env.example .env
 # Editar .env con tu configuración
 ```
 
 #### 5. Iniciar con Docker
+
 ```bash
 # Construir y levantar servicios
 make docker-up
@@ -79,6 +90,7 @@ make docker-logs
 ```
 
 #### 6. O iniciar en modo desarrollo local
+
 ```bash
 # Aplicar migraciones
 make db-upgrade
@@ -90,6 +102,7 @@ make dev
 ### Opción 2: Instalación Manual 🛠️
 
 #### 1. Clonar y configurar entorno
+
 ```bash
 git clone https://github.com/jhobahego/api-investi-flow.git
 cd investi-flow-api
@@ -99,16 +112,19 @@ source .venv/bin/activate  # Linux/Mac
 ```
 
 #### 2. Instalar dependencias
+
 ```bash
 pip install -r requirements.txt
 ```
 
 #### 3. Configurar variables de entorno
+
 ```bash
 cp .env.example .env
 ```
 
 Editar el archivo `.env` con tu configuración:
+
 ```env
 # Base de datos
 DATABASE_URL=postgresql://usuario:contraseña@localhost/investi_flow_db
@@ -126,6 +142,7 @@ BACKEND_CORS_ORIGIN=http://localhost:5173
 ```
 
 #### 4. Configurar PostgreSQL
+
 ```bash
 # Crear base de datos
 createdb investi_flow_db
@@ -137,11 +154,13 @@ CREATE DATABASE investi_flow_db;
 ```
 
 #### 5. Ejecutar migraciones
+
 ```bash
 alembic upgrade head
 ```
 
 #### 6. Iniciar servidor
+
 ```bash
 uvicorn main:app --reload
 ```
@@ -149,6 +168,7 @@ uvicorn main:app --reload
 ### Opción 3: Solo Docker (Más Simple) 🐳
 
 #### 1. Clonar y configurar
+
 ```bash
 git clone https://github.com/jhobahego/api-investi-flow.git
 cd investi-flow-api
@@ -156,6 +176,7 @@ cp .env.example .env
 ```
 
 #### 2. Levantar todo con Docker
+
 ```bash
 docker compose up -d
 ```
@@ -165,6 +186,7 @@ docker compose up -d
 ### Variables de Entorno (.env)
 
 #### Base de Datos
+
 ```env
 # Para desarrollo local
 DATABASE_URL=postgresql://usuario:contraseña@localhost/investi_flow_db
@@ -174,6 +196,7 @@ DATABASE_URL=postgresql://postgres:postgres@db:5432/investi_flow_db
 ```
 
 #### Seguridad
+
 ```env
 # Generar una clave secreta segura
 SECRET_KEY=openssl rand -hex 32
@@ -184,12 +207,14 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
 #### CORS
+
 ```env
 # URLs permitidas para CORS (separadas por comas)
 BACKEND_CORS_ORIGIN=http://localhost:5173
 ```
 
 #### Configuración de IA
+
 ```env
 # Claves de API de IA
 OPENAI_API_KEY=your-openai-api-key
@@ -203,6 +228,7 @@ AI_MODEL_BIBLIOGRAPHY=gemini-3.1-pro-preview
 ```
 
 #### Entorno
+
 ```env
 ENVIRONMENT=development
 PROJECT_NAME=InvestiFlow API
@@ -214,6 +240,7 @@ API_V1_STR=/api/v1
 #### Instalación PostgreSQL en diferentes SO
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt update
 sudo apt install postgresql postgresql-contrib
@@ -222,15 +249,18 @@ sudo systemctl enable postgresql
 ```
 
 **macOS (con Homebrew):**
+
 ```bash
 brew install postgresql
 brew services start postgresql
 ```
 
 **Windows:**
+
 - Descargar desde [postgresql.org](https://www.postgresql.org/download/windows/)
 
 #### Crear usuario y base de datos
+
 ```sql
 -- Conectar como superusuario
 sudo -u postgres psql
@@ -251,6 +281,7 @@ GRANT ALL PRIVILEGES ON DATABASE investi_flow_db TO investi_user;
 ## 🔍 Verificación de la Instalación
 
 ### 1. Verificar servicios
+
 ```bash
 # API principal
 curl http://localhost:8000/health
@@ -260,6 +291,7 @@ open http://localhost:8000/docs
 ```
 
 ### 2. Verificar base de datos
+
 ```bash
 # Conectar a la base de datos
 psql -U investi_user -d investi_flow_db
@@ -272,6 +304,7 @@ SELECT * FROM users LIMIT 1;
 ```
 
 ### 3. Ejecutar tests
+
 ```bash
 # Tests básicos
 make test
@@ -283,6 +316,7 @@ make test-cov
 ## 🛠️ Solución de Problemas Comunes
 
 ### Problemas de Permisos (Linux)
+
 ```bash
 # Docker permissions
 sudo usermod -aG docker $USER
@@ -293,6 +327,7 @@ sudo chmod 755 /var/run/postgresql
 ```
 
 ### Puerto ya en uso
+
 ```bash
 # Ver qué proceso usa el puerto 8000
 lsof -i :8000
@@ -305,6 +340,7 @@ uvicorn main:app --reload --port 8001
 ```
 
 ### Problemas con migraciones
+
 ```bash
 # Verificar estado de migraciones
 alembic current
@@ -317,6 +353,7 @@ make db-migrate msg="descripcion_del_cambio"
 ```
 
 ### Variables de entorno no cargadas
+
 ```bash
 # Verificar que el archivo .env existe
 ls -la .env
@@ -330,6 +367,7 @@ source .venv/bin/activate
 ```
 
 ### Problemas con Docker
+
 ```bash
 # Limpiar containers y volúmenes
 docker compose down -v --remove-orphans
@@ -353,6 +391,7 @@ Una vez configurado el entorno:
 ## 📞 Soporte
 
 Si encuentras problemas no cubiertos en esta guía:
+
 1. Revisar los logs: `make docker-logs` o `docker compose logs`
 2. Verificar issues en el repositorio
 3. Consultar la documentación oficial de cada herramienta
