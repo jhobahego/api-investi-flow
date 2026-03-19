@@ -154,9 +154,6 @@ Organización Mundial de la Salud. (2023, 15 de marzo). *Guías de salud mental*
 Responde SOLO con la(s) cita(s) formateada(s), sin ningún texto adicional.
 """
 
-# =============================================================================
-# PROMPT PARA BÚSQUEDA DE BIBLIOGRAFÍA (OPTIMIZADO PARA GROUNDING)
-# =============================================================================
 BIBLIOGRAPHY_SYSTEM_PROMPT = """Eres un asistente de investigación académica especializado en encontrar fuentes científicas verificables EN ESPAÑOL.
 Tu función es buscar referencias bibliográficas REALES y CONFIABLES usando Google Search, EXCLUSIVAMENTE en idioma español.
 
@@ -165,6 +162,12 @@ RESTRICCIÓN CRÍTICA DE IDIOMA:
 🔴 RECHAZA cualquier fuente en inglés, portugués u otros idiomas
 🔴 Si la consulta está en inglés, tradúcela al español antes de buscar
 🔴 Prioriza fuentes de: España, México, Argentina, Colombia, Chile y otros países hispanohablantes
+
+RESTRICCIÓN CRÍTICA DE URL (ENLACES EXACTOS):
+🚨 NUNCA DEVUELVAS LA PÁGINA PRINCIPAL DEL REPOSITORIO (ej. https://repositorio.uasb.edu.bo/)
+🚨 DEBES buscar y retornar el ENLACE COMPLETO EXACTO al documento, artículo o ficha técnica (ej. https://repositorio.uasb.edu.bo/items/70dca925-d1b4-49f0-ae97-26eb71787891)
+🚨 Privilegia URLs que apunten directamente a un .pdf o a la página específica de la investigación con el DOI.
+🚨 Si no puedes encontrar el enlace exacto al artículo dentro del repositorio, descarta esa fuente y busca otra.
 
 CONTEXTO IMPORTANTE:
 - Tienes acceso a Google Search para buscar fuentes REALES en español
@@ -181,29 +184,28 @@ CRITERIOS DE BÚSQUEDA (SOLO EN ESPAÑOL):
 
 INSTRUCCIONES CRÍTICAS:
 1. Usa Google Search para encontrar fuentes reales sobre la consulta
-2. Verifica que cada URL sea accesible y legítima
+2. Verifica que cada URL sea accesible, legítima y apunte al DOCUMENTO ESPECÍFICO, no a la "Home" de la entidad.
 3. Extrae información REAL de los snippets de búsqueda
-4. Si no encuentras información completa (autores, año), déjalo en blanco o como "Desconocido"
-5. NO alucinaciones: mejor decir "Autor desconocido" que inventar nombres
+4. Si no encuentras información completa (autores, año), usa null o strings vacíos según el tipo de dato.
+5. NO alucinaciones: mejor omitir un autor secundario que inventar nombres
+6. TU RESPUESTA DEBE SER ESTRICTAMENTE UN JSON VÁLIDO. SIN TEXTO ANTES O DESPUÉS DEL JSON.
 
-FORMATO DE RESPUESTA (JSON estructurado):
-Devuelve un array JSON con las fuentes VERIFICADAS encontradas:
+FORMATO DE RESPUESTA (JSON estructurado ESTRICTO):
+Devuelve un array JSON con las fuentes VERIFICADAS encontradas. DEBE SER 100% PARSEABLE y no contener comentarios ni texto fuera del JSON:
 
-```json
 [
-  {{
+  {
     "titulo": "Título exacto extraído de la fuente",
-    "autores": ["Autor1, A.", "Autor2, B."] o ["Autor desconocido"],
-    "anio": 2023 o 2024 (si no sabes, usa el año actual),
-    "tipo": "articulo|libro|tesis|capitulo|web",
-    "fuente": "Nombre de la revista/sitio web extraído de la URL",
-    "doi": "10.xxxx/xxxxx si está disponible, null si no",
-    "url": "URL REAL verificada de la búsqueda de Google",
-    "resumen": "Snippet o descripción REAL de la fuente (extraída de Google)",
+    "autores": ["Autor1", "Autor2"],
+    "anio": 2023,
+    "tipo": "articulo",
+    "fuente": "Nombre de la revista o sitio web extraído de la URL",
+    "doi": "10.xxxx/xxxxx",
+    "url": "https://enlace.exacto.al.documento.com/ruta/completa/al/articulo",
+    "resumen": "Snippet o descripción REAL de la fuente",
     "relevancia": 5
-  }}
+  }
 ]
-```
 
 CRITERIOS DE RELEVANCIA (basado en posición y calidad):
 - 5: Primera posición en resultados, fuente altamente académica (Scholar, PubMed)
@@ -216,13 +218,14 @@ IMPORTANTE:
 - Devuelve SOLO fuentes EN ESPAÑOL que Google Search encontró (máximo 10)
 - Si Google no encuentra fuentes académicas en español, devuelve las más confiables en español disponibles
 - Ordena por relevancia: las mejores primero
-- JSON válido sin texto adicional
+- JSON válido sin texto adicional (Nada de markdown ```json ... ```)
 - Si no hay resultados EN ESPAÑOL, devuelve un array vacío: []
 
 RECUERDA:
 1. IDIOMA ESPAÑOL ES OBLIGATORIO - No aceptes fuentes en otros idiomas
 2. VERIFICABILIDAD > COMPLETITUD - Es mejor una fuente con URL real pero sin DOI, que una fuente inventada con todos los campos completos
-3. Si la consulta original está en inglés, tradúcela a español automáticamente para la búsqueda
+3. URLS COMPLETAS Y EXACTAS - Si solo devuelves el root de un sitio, tu respuesta será rechazada. Busca el enlace a la página de la tesis/artículo específico.
+4. Si la consulta original está en inglés, tradúcela a español automáticamente para la búsqueda
 """
 
 # =============================================================================
@@ -236,6 +239,7 @@ def format_project_context(
     research_type: str | None = None,
     objectives: str | None = None,
     documents_summary: str | None = None,
+    bibliographies_summary: str | None = None,
 ) -> str:
     """
     Formatea el contexto del proyecto para incluirlo en el prompt del chat.
@@ -246,6 +250,7 @@ def format_project_context(
         research_type: Tipo de investigación
         objectives: Objetivos del proyecto
         documents_summary: Resumen de documentos adjuntos
+        bibliographies_summary: Resumen de bibliografías del proyecto
 
     Returns:
         str: Contexto formateado
@@ -262,9 +267,14 @@ def format_project_context(
         context_parts.append(f"**Objetivos**: {objectives}")
 
     if documents_summary:
-        context_parts.append(f"**Documentos del Proyecto**: {documents_summary}")
+        context_parts.append(
+            f"**Contenido del Documento Principal**: {documents_summary}"
+        )
 
-    return "\n".join(context_parts)
+    if bibliographies_summary:
+        context_parts.append(f"**Bibliografía del Proyecto**: {bibliographies_summary}")
+
+    return "\n\n".join(context_parts)
 
 
 def format_bibliography_context(bibliography_list: list[dict] | None = None) -> str:

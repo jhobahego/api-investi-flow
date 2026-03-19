@@ -115,6 +115,45 @@ class TestAIService:
         assert mock_genai_client.models.generate_content.called
 
     @pytest.mark.asyncio
+    async def test_chat_with_history_includes_system_instruction(
+        self, ai_service_instance, mock_genai_client
+    ):
+        """Probar que el contexto del proyecto se envía incluso con historial existente"""
+        # Mock de la respuesta
+        mock_response = MagicMock()
+        mock_response.text = "Respuesta basada en el contexto del proyecto"
+        mock_genai_client.models.generate_content.return_value = mock_response
+
+        message = "¿De qué trata este proyecto?"
+        history = [
+            {"role": "user", "content": "Hola"},
+            {"role": "model", "content": "Hola, ¿en qué puedo ayudarte?"},
+        ]
+        project_context = "Proyecto de investigación sobre IA en educación"
+
+        response_text, model_used = await ai_service_instance.chat(
+            message=message, history=history, project_context=project_context
+        )
+
+        assert response_text == "Respuesta basada en el contexto del proyecto"
+        assert model_used is not None
+
+        # Verificar que generate_content fue llamado
+        assert mock_genai_client.models.generate_content.called
+
+        # Verificar que el config tiene system_instruction
+        call_args = mock_genai_client.models.generate_content.call_args
+        config = call_args.kwargs.get("config")
+
+        assert config is not None
+        assert hasattr(config, "system_instruction")
+        assert config.system_instruction is not None
+        assert (
+            "Proyecto de investigación sobre IA en educación"
+            in config.system_instruction
+        )
+
+    @pytest.mark.asyncio
     async def test_chat_no_response(self, ai_service_instance, mock_genai_client):
         """Probar error cuando no hay respuesta del chat"""
         # Mock de respuesta sin texto

@@ -171,7 +171,7 @@ class TestCitations:
         )
 
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/ia/citas",
+            f"/api/v1/proyectos/{project_id}/ia/citas",
             json={
                 "tipo": "libro",
                 "autores": [{"nombre": "John", "apellido": "Smith"}],
@@ -194,7 +194,7 @@ class TestCitations:
         headers, _ = create_test_user_and_login()
 
         response = client.post(
-            "/api/v1/ia/proyectos/99999/ia/citas",
+            "/api/v1/proyectos/99999/ia/citas",
             json={
                 "tipo": "libro",
                 "autores": [{"nombre": "John", "apellido": "Smith"}],
@@ -219,7 +219,7 @@ class TestCitations:
         )
 
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/ia/citas",
+            f"/api/v1/proyectos/{project_id}/ia/citas",
             json={
                 "tipo": "articulo",
                 "autores": [{"nombre": "John", "apellido": "Smith"}],
@@ -241,7 +241,7 @@ class TestCitations:
     def test_format_citation_unauthorized(self):
         """Probar formateo sin autenticación"""
         response = client.post(
-            "/api/v1/ia/proyectos/1/ia/citas",
+            "/api/v1/proyectos/1/ia/citas",
             json={
                 "tipo": "libro",
                 "autores": [{"nombre": "John", "apellido": "Smith"}],
@@ -281,7 +281,7 @@ class TestBibliography:
         )
 
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/ia/bibliografias",
+            f"/api/v1/proyectos/{project_id}/ia/bibliografias",
             json={
                 "query": "machine learning in education",
                 "max_results": 10,
@@ -304,7 +304,7 @@ class TestBibliography:
         headers, _ = create_test_user_and_login()
 
         response = client.post(
-            "/api/v1/ia/proyectos/99999/ia/bibliografias",
+            "/api/v1/proyectos/99999/ia/bibliografias",
             json={
                 "query": "test query",
                 "max_results": 5,
@@ -325,7 +325,7 @@ class TestBibliography:
         )
 
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/ia/bibliografias",
+            f"/api/v1/proyectos/{project_id}/ia/bibliografias",
             json={
                 "query": "test query",
                 "max_results": 5,
@@ -347,7 +347,7 @@ class TestBibliography:
         mock_search_bib.return_value = ([], "gemini-1.5-pro")
 
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/ia/bibliografias",
+            f"/api/v1/proyectos/{project_id}/ia/bibliografias",
             json={
                 "query": "very obscure topic that doesnt exist",
                 "max_results": 10,
@@ -363,7 +363,7 @@ class TestBibliography:
     def test_search_bibliography_unauthorized(self):
         """Probar búsqueda sin autenticación"""
         response = client.post(
-            "/api/v1/ia/proyectos/1/ia/bibliografias",
+            "/api/v1/proyectos/1/ia/bibliografias",
             json={
                 "query": "test query",
                 "max_results": 5,
@@ -382,7 +382,7 @@ class TestConversations:
         project_id = create_test_project(headers)
 
         response = client.get(
-            f"/api/v1/ia/proyectos/{project_id}/conversaciones",
+            f"/api/v1/proyectos/{project_id}/conversaciones",
             headers=headers,
         )
 
@@ -403,7 +403,7 @@ class TestConversations:
         )
 
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={
                 "message": "Hola, ¿cómo estás?",
                 "title": "Mi primera conversación",
@@ -430,7 +430,7 @@ class TestConversations:
         # Crear primera conversación
         mock_chat.return_value = ("Primera respuesta", "gemini-1.5-pro")
         response1 = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Primer mensaje", "title": "Test Conversation"},
             headers=headers,
         )
@@ -439,7 +439,7 @@ class TestConversations:
         # Continuar la conversación
         mock_chat.return_value = ("Segunda respuesta", "gemini-1.5-pro")
         response2 = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Segundo mensaje", "conversation_id": conversation_id},
             headers=headers,
         )
@@ -458,19 +458,19 @@ class TestConversations:
         # Crear dos conversaciones
         mock_chat.return_value = ("Respuesta", "gemini-1.5-pro")
         client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Mensaje 1", "title": "Conversación 1"},
             headers=headers,
         )
         client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Mensaje 2", "title": "Conversación 2"},
             headers=headers,
         )
 
         # Listar conversaciones
         response = client.get(
-            f"/api/v1/ia/proyectos/{project_id}/conversaciones",
+            f"/api/v1/proyectos/{project_id}/conversaciones",
             headers=headers,
         )
 
@@ -485,7 +485,7 @@ class TestConversations:
         headers, _ = create_test_user_and_login()
 
         response = client.post(
-            "/api/v1/ia/proyectos/99999/chat",
+            "/api/v1/proyectos/99999/chat",
             json={"message": "Test message"},
             headers=headers,
         )
@@ -495,7 +495,7 @@ class TestConversations:
     def test_chat_unauthorized(self):
         """Probar chat sin autenticación"""
         response = client.post(
-            "/api/v1/ia/proyectos/1/chat",
+            "/api/v1/proyectos/1/chat",
             json={"message": "Test message"},
         )
 
@@ -510,7 +510,7 @@ class TestConversations:
         # Crear conversación con mensajes
         mock_chat.return_value = ("Respuesta", "gemini-1.5-pro")
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Hola", "title": "Test"},
             headers=headers,
         )
@@ -518,7 +518,7 @@ class TestConversations:
 
         # Obtener conversación
         response = client.get(
-            f"/api/v1/ia/proyectos/{project_id}/conversaciones/{conversation_id}",
+            f"/api/v1/proyectos/{project_id}/conversaciones/{conversation_id}",
             headers=headers,
         )
 
@@ -538,7 +538,7 @@ class TestConversations:
         # Crear conversación
         mock_chat.return_value = ("Respuesta", "gemini-1.5-pro")
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Hola", "title": "Título Original"},
             headers=headers,
         )
@@ -546,7 +546,7 @@ class TestConversations:
 
         # Actualizar título
         response = client.patch(
-            f"/api/v1/ia/proyectos/{project_id}/conversaciones/{conversation_id}",
+            f"/api/v1/proyectos/{project_id}/conversaciones/{conversation_id}",
             json={"title": "Título Actualizado"},
             headers=headers,
         )
@@ -564,7 +564,7 @@ class TestConversations:
         # Crear conversación
         mock_chat.return_value = ("Respuesta", "gemini-1.5-pro")
         response = client.post(
-            f"/api/v1/ia/proyectos/{project_id}/chat",
+            f"/api/v1/proyectos/{project_id}/chat",
             json={"message": "Hola", "title": "Para eliminar"},
             headers=headers,
         )
@@ -572,7 +572,7 @@ class TestConversations:
 
         # Eliminar conversación
         response = client.delete(
-            f"/api/v1/ia/proyectos/{project_id}/conversaciones/{conversation_id}",
+            f"/api/v1/proyectos/{project_id}/conversaciones/{conversation_id}",
             headers=headers,
         )
 
@@ -580,7 +580,7 @@ class TestConversations:
 
         # Verificar que ya no existe
         response = client.get(
-            f"/api/v1/ia/proyectos/{project_id}/conversaciones/{conversation_id}",
+            f"/api/v1/proyectos/{project_id}/conversaciones/{conversation_id}",
             headers=headers,
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND

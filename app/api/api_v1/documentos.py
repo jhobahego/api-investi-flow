@@ -11,8 +11,10 @@ from app.schemas.document import (
     DocumentContentResponse,
     DocumentPagesResponse,
     DocumentPreviewResponse,
+    DocumentUpdateContent,
 )
 from app.services.document_extraction_service import document_extraction_service
+from app.services.document_generation_service import document_generation_service
 
 router = APIRouter(prefix="/documentos", tags=["documentos"])
 
@@ -225,3 +227,72 @@ async def extract_document_pages(
     }
 
     return DocumentPagesResponse(**response_data)
+
+
+@router.put("/{attachment_id}/content")
+async def update_document_content(
+    attachment_id: int,
+    content_in: DocumentUpdateContent,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualiza el contenido de un documento .docx a partir de las páginas HTML editadas.
+
+    Args:
+        attachment_id: ID del adjunto/documento
+        content_in: Contenido del documento (páginas HTML)
+        db: Sesión de base de datos
+        current_user: Usuario autenticado
+
+    Returns:
+        Dict con mensaje de éxito
+
+    Raises:
+        HTTPException 404: Si el documento no existe
+        HTTPException 403: Si el usuario no tiene permisos
+        HTTPException 400: Si el formato no es .docx
+        HTTPException 500: Si hay error en la generación
+    """
+    # Obtener el adjunto
+    attachment = attachment_repository.get(db, attachment_id)
+
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    # Validar permisos
+    from app.services.attachment_service import attachment_service
+
+    parent_type, parent_id = attachment_service._get_parent_info(attachment)
+
+    try:
+        attachment_service._validate_parent_entity(
+            db, parent_type, parent_id, current_user.id
+        )
+    except HTTPException:
+        raise HTTPException(
+            status_code=403, detail="No tiene permisos para modificar este documento"
+        )
+
+    # Validar tipo de archivo
+    if attachment.file_type.lower() not in [
+        "docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede actualizar el contenido de archivos .docx",
+        )
+
+    # Convertir HTML a DOCX
+    file_path = str(attachment.file_path)
+    document_generation_service.html_pages_to_docx(content_in.pages, file_path)
+
+    # Actualizar tamaño en BD y fecha de actualización
+    import os
+
+    if os.path.exists(file_path):
+        attachment.file_size = os.path.getsize(file_path)
+
+    db.commit()
+    return {"message": "Documento actualizado exitosamente"}

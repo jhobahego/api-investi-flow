@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.ai_config import UserPlan
-from app.core.ai_prompts import format_project_context
+from app.core.ai_prompts import format_bibliography_context, format_project_context
 from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.repositories.bibliography_repository import bibliography_repository
 from app.repositories.conversation_repository import (
     conversation_repository,
     message_repository,
@@ -29,11 +30,14 @@ from app.schemas.conversation import (
     ConversationUpdate,
 )
 from app.services.ai_service import AIServiceError, ModelNotAvailableError, ai_service
+from app.services.attachment_service import attachment_service
+from app.services.document_extraction_service import document_extraction_service
 from app.services.project_service import project_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+project_router = APIRouter()
 
 
 # =============================================================================
@@ -176,7 +180,7 @@ async def generate_suggestion(
 # =============================================================================
 
 
-@router.post(
+@project_router.post(
     "/proyectos/{project_id}/ia/citas",
     response_model=CitationResponse,
     status_code=status.HTTP_200_OK,
@@ -350,7 +354,7 @@ async def format_citation(
 # =============================================================================
 
 
-@router.post(
+@project_router.post(
     "/proyectos/{project_id}/ia/bibliografias",
     response_model=BibliographyResponse,
     status_code=status.HTTP_200_OK,
@@ -432,11 +436,29 @@ async def search_bibliography(
         # Por ahora usamos plan investigador (tiene acceso a bibliografía)
         user_plan = UserPlan.INVESTIGADOR
 
+        # Formatear contexto del proyecto si se proporciona en el request
+        project_context_str = None
+        if request.project_context:
+            project_context_str = format_project_context(
+                project_name=request.project_context.get("name", ""),
+                description=request.project_context.get("description", ""),
+                research_type=request.project_context.get("research_type", ""),
+            )
+        # Si no viene en el request, usar el del proyecto de la DB
+        elif project:
+            project_context_str = format_project_context(
+                project_name=project.name,
+                description=project.description or "",
+                research_type=project.research_type or "",
+            )
+
         # Llamar al servicio de IA
         sources, model_used = await ai_service.search_bibliography(
             query=request.query,
             max_results=request.max_results,
             plan=user_plan,
+            project_context=project_context_str,
+            search_context=request.search_context,
         )
 
         # Convertir sources a formato de schema
@@ -517,7 +539,7 @@ async def search_bibliography(
 # =============================================================================
 
 
-@router.get(
+@project_router.get(
     "/proyectos/{project_id}/conversaciones",
     response_model=list[ConversationListResponse],
     status_code=status.HTTP_200_OK,
@@ -584,7 +606,7 @@ async def list_conversations(
         )
 
 
-@router.get(
+@project_router.get(
     "/proyectos/{project_id}/conversaciones/{conversation_id}",
     response_model=ConversationResponse,
     status_code=status.HTTP_200_OK,
@@ -631,7 +653,7 @@ async def get_conversation(
         )
 
 
-@router.patch(
+@project_router.patch(
     "/proyectos/{project_id}/conversaciones/{conversation_id}",
     response_model=ConversationResponse,
     status_code=status.HTTP_200_OK,
@@ -690,7 +712,7 @@ async def update_conversation(
         )
 
 
-@router.delete(
+@project_router.delete(
     "/proyectos/{project_id}/conversaciones/{conversation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Eliminar una conversación",
@@ -734,7 +756,7 @@ async def delete_conversation(
         )
 
 
-@router.post(
+@project_router.post(
     "/proyectos/{project_id}/chat",
     response_model=ChatWithHistoryResponse,
     status_code=status.HTTP_200_OK,
@@ -805,11 +827,52 @@ async def chat_with_persistent_history(
             if msg.id != user_message.id  # Excluir el mensaje recién creado
         ]
 
+        # Obtener contenido del documento adjunto
+        document_content = None
+        try:
+            attachment = attachment_service.get_attachment_by_parent(
+                db, parent_type="project", parent_id=project_id, user_id=current_user.id
+            )
+            if (
+                attachment
+                and attachment.file_path
+                and str(attachment.file_path).endswith(".docx")
+            ):
+                # Extraer contenido del documento (primeros 10000 caracteres para contexto)
+                document_content = document_extraction_service.get_document_preview(
+                    str(attachment.file_path), max_chars=10000
+                )
+        except Exception as e:
+            logger.warning(f"Error al obtener contenido del documento para chat: {e}")
+
+        # Obtener bibliografías del proyecto
+        bibliographies_summary = None
+        try:
+            bibliographies = bibliography_repository.get_by_project(
+                db, project_id=project_id
+            )
+            if bibliographies:
+                # Convertir a lista de dicts para el formateador
+                bib_list = [
+                    {
+                        "autores": b.author,
+                        "anio": b.year,
+                        "titulo": b.title,
+                        "tipo": b.type,
+                    }
+                    for b in bibliographies
+                ]
+                bibliographies_summary = format_bibliography_context(bib_list)
+        except Exception as e:
+            logger.warning(f"Error al obtener bibliografías para chat: {e}")
+
         # Formatear contexto del proyecto
         project_context = format_project_context(
             project_name=project.name,  # type: ignore
             description=project.description,  # type: ignore
             research_type=project.research_type,  # type: ignore
+            documents_summary=document_content,
+            bibliographies_summary=bibliographies_summary,
         )
 
         # Llamar al servicio de IA
