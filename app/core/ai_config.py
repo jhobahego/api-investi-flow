@@ -1,5 +1,7 @@
 from enum import Enum
 
+from app.core.config import settings
+
 
 class UserPlan(str, Enum):
     """Planes de usuario disponibles en la plataforma"""
@@ -23,25 +25,24 @@ class AIFeature(str, Enum):
 # =============================================================================
 
 PLAN_MODELS: dict[UserPlan, dict[AIFeature, str | None]] = {
-    # Por el momento se va a usar el mismo modelo para todos los planes, por temas de costo y pruebas de la plataforma.
-    # Modelo a usar: gemini-2.5-flash-lite
+    # Los modelos se leen desde variables de entorno (settings.AI_MODEL_*)
     UserPlan.ESTUDIANTE: {
-        AIFeature.CHAT: "gemini-2.5-flash-lite",  # Modelo rápido para chat básico
-        AIFeature.SUGGESTIONS: "gemini-2.5-flash-lite",  # Modelo ultraligero para sugerencias
-        AIFeature.CITATIONS: "gemini-2.5-flash-lite",  # Flash para formateo de citas
+        AIFeature.CHAT: settings.AI_MODEL_CHAT,
+        AIFeature.SUGGESTIONS: settings.AI_MODEL_SUGGESTIONS,
+        AIFeature.CITATIONS: settings.AI_MODEL_CITATIONS,
         AIFeature.BIBLIOGRAPHY: None,  # No disponible en plan gratuito
     },
     UserPlan.INVESTIGADOR: {
-        AIFeature.CHAT: "gemini-2.5-flash-lite",  # Flash para conversaciones
-        AIFeature.SUGGESTIONS: "gemini-2.5-flash-lite",  # Lite para autocompletado rápido
-        AIFeature.CITATIONS: "gemini-2.5-flash-lite",  # Flash para citas
-        AIFeature.BIBLIOGRAPHY: "gemini-2.5-flash-lite",  # Modelo mas potente con Grounding Search para la feature mas potente.
+        AIFeature.CHAT: settings.AI_MODEL_CHAT,
+        AIFeature.SUGGESTIONS: settings.AI_MODEL_SUGGESTIONS,
+        AIFeature.CITATIONS: settings.AI_MODEL_CITATIONS,
+        AIFeature.BIBLIOGRAPHY: settings.AI_MODEL_BIBLIOGRAPHY,
     },
     UserPlan.PROFESIONAL: {
-        AIFeature.CHAT: "gemini-2.5-flash-lite",  # Thinking para análisis profundo
-        AIFeature.SUGGESTIONS: "gemini-2.5-flash-lite",  # Flash para sugerencias rápidas
-        AIFeature.CITATIONS: "gemini-2.5-flash-lite",  # Flash para formateo preciso
-        AIFeature.BIBLIOGRAPHY: "gemini-2.5-flash-lite",  # Modelo mas potente con Grounding Search para la feature mas potente.
+        AIFeature.CHAT: settings.AI_MODEL_CHAT,
+        AIFeature.SUGGESTIONS: settings.AI_MODEL_SUGGESTIONS,
+        AIFeature.CITATIONS: settings.AI_MODEL_CITATIONS,
+        AIFeature.BIBLIOGRAPHY: settings.AI_MODEL_BIBLIOGRAPHY,
     },
 }
 
@@ -102,25 +103,11 @@ PLAN_LIMITS: dict[UserPlan, dict[str, int]] = {
 # CONFIGURACIÓN GENERAL DE MODELOS
 # =============================================================================
 
-MODEL_GENERATION_CONFIG: dict[str, dict[str, float | int]] = {
-    "gemini-2.0-flash-lite": {
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 1024,
-    },
-    "gemini-2.0-flash-exp": {
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 2048,
-    },
-    "gemini-2.0-flash-lite-001": {
-        "temperature": 0.8,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 8192,
-    },
+DEFAULT_GENERATION_CONFIG: dict[str, float | int] = {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 2048,
 }
 
 # Configuraciones específicas por funcionalidad (overrides opcionales)
@@ -200,10 +187,7 @@ def get_generation_config(model_name: str, feature: AIFeature | None = None) -> 
         dict: Configuración de generación del modelo
     """
     # Obtener configuración base del modelo
-    config = MODEL_GENERATION_CONFIG.get(
-        model_name,
-        MODEL_GENERATION_CONFIG["gemini-2.0-flash-exp"],  # Default
-    ).copy()
+    config = DEFAULT_GENERATION_CONFIG.copy()
 
     # Aplicar overrides específicos de la funcionalidad si existe
     if feature and feature in FEATURE_GENERATION_CONFIG:

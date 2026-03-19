@@ -571,7 +571,7 @@ class AIService:
         try:
             # Intentar una generación simple como health check
             test_response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp",
+                model=settings.AI_MODEL_CHAT,
                 contents="Hello, test API health check",
                 config=types.GenerateContentConfig(
                     temperature=0.1,

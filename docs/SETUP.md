@@ -189,6 +189,19 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 BACKEND_CORS_ORIGIN=http://localhost:5173
 ```
 
+#### Configuración de IA
+```env
+# Claves de API de IA
+OPENAI_API_KEY=your-openai-api-key
+GOOGLE_AI_API_KEY=your-google-ai-api-key
+
+# Modelos recomendados para cada funcionalidad
+AI_MODEL_CHAT=gemini-2.5-flash-lite
+AI_MODEL_SUGGESTIONS=gemini-2.5-flash-lite
+AI_MODEL_CITATIONS=gemini-2.5-flash-lite
+AI_MODEL_BIBLIOGRAPHY=gemini-3.1-pro-preview
+```
+
 #### Entorno
 ```env
 ENVIRONMENT=development
