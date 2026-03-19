@@ -166,4 +166,6 @@ def downgrade() -> None:
     op.drop_table("tasks")
     op.drop_index(op.f("ix_phases_id"), table_name="phases")
     op.drop_table("phases")
+    op.execute("DROP TYPE IF EXISTS taskstatus CASCADE")
+    op.execute("DROP TYPE IF EXISTS filetype CASCADE")
     # ### end Alembic commands ###
