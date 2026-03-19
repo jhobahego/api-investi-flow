@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_AI_API_KEY: Optional[str] = None
 
+    # AI Models
+    AI_MODEL_CHAT: str = "gemini-2.5-flash-lite"
+    AI_MODEL_SUGGESTIONS: str = "gemini-2.5-flash-lite"
+    AI_MODEL_CITATIONS: str = "gemini-2.5-flash-lite"
+    AI_MODEL_BIBLIOGRAPHY: str = "gemini-3.1-pro-preview"
+
     # Redis
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
 

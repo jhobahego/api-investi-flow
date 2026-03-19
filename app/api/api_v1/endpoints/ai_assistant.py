@@ -560,7 +560,9 @@ async def list_conversations(
     try:
         # Verificar acceso al proyecto
         project = project_service.get_user_project_by_id(
-            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+            db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
         if not project:
             raise HTTPException(
@@ -570,7 +572,9 @@ async def list_conversations(
 
         # Obtener conversaciones
         conversations = conversation_repository.get_by_project_and_user(
-            db, project_id=project_id, user_id=current_user.id  # type: ignore
+            db,
+            project_id=project_id,
+            user_id=current_user.id,  # type: ignore
         )
 
         # Construir respuesta con metadata
@@ -622,7 +626,9 @@ async def get_conversation(
     try:
         # Verificar acceso al proyecto
         project = project_service.get_user_project_by_id(
-            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+            db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
         if not project:
             raise HTTPException(
@@ -632,7 +638,9 @@ async def get_conversation(
 
         # Obtener conversación con mensajes
         conversation = conversation_repository.get_with_messages(
-            db, conversation_id=conversation_id, user_id=current_user.id  # type: ignore
+            db,
+            conversation_id=conversation_id,
+            user_id=current_user.id,  # type: ignore
         )
 
         if not conversation:
@@ -676,7 +684,9 @@ async def update_conversation(
 
         # Verificar acceso al proyecto
         project = project_service.get_user_project_by_id(
-            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+            db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
         if not project:
             raise HTTPException(
@@ -686,7 +696,10 @@ async def update_conversation(
 
         # Actualizar conversación
         conversation = conversation_repository.update_title(
-            db, conversation_id=conversation_id, user_id=current_user.id, new_title=data.title  # type: ignore
+            db,
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            new_title=data.title,  # type: ignore
         )
 
         if not conversation:
@@ -697,7 +710,9 @@ async def update_conversation(
 
         # Recargar con mensajes
         conversation = conversation_repository.get_with_messages(
-            db, conversation_id=conversation_id, user_id=current_user.id  # type: ignore
+            db,
+            conversation_id=conversation_id,
+            user_id=current_user.id,  # type: ignore
         )
 
         return ConversationResponse.model_validate(conversation)
@@ -727,7 +742,9 @@ async def delete_conversation(
     try:
         # Verificar acceso al proyecto
         project = project_service.get_user_project_by_id(
-            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+            db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
         if not project:
             raise HTTPException(
@@ -770,7 +787,7 @@ async def delete_conversation(
     - Retorna la respuesta del asistente y el ID de la conversación.
     """,
 )
-async def chat_with_persistent_history(
+async def chat_with_persistent_history(  # noqa: C901
     project_id: int,
     request: ChatWithHistoryRequest,
     current_user: User = Depends(get_current_user),
@@ -786,7 +803,9 @@ async def chat_with_persistent_history(
 
         # Verificar acceso al proyecto
         project = project_service.get_user_project_by_id(
-            db, project_id=project_id, owner_id=current_user.id  # type: ignore
+            db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
         )
         if not project:
             raise HTTPException(
@@ -798,7 +817,9 @@ async def chat_with_persistent_history(
         if request.conversation_id:
             # Continuar conversación existente
             conversation = conversation_repository.get_with_messages(
-                db, conversation_id=request.conversation_id, user_id=current_user.id  # type: ignore
+                db,
+                conversation_id=request.conversation_id,
+                user_id=current_user.id,  # type: ignore
             )
             if not conversation:
                 raise HTTPException(
@@ -809,7 +830,10 @@ async def chat_with_persistent_history(
             # Crear nueva conversación
             title = request.title or "Nueva conversación"
             conversation = conversation_repository.create_conversation(
-                db, project_id=project_id, user_id=current_user.id, title=title  # type: ignore
+                db,
+                project_id=project_id,
+                user_id=current_user.id,
+                title=title,  # type: ignore
             )
 
         # Guardar mensaje del usuario
@@ -892,6 +916,24 @@ async def chat_with_persistent_history(
             content=response_text,
             model_used=model_used,
         )
+
+        # Generar título para conversaciones nuevas si no se proporcionó uno
+        if not request.conversation_id and not request.title:
+            try:
+                new_title = ai_service.generate_conversation_title(
+                    message=request.message, response=response_text
+                )
+                if new_title:
+                    conversation_repository.update_title(
+                        db,
+                        conversation_id=conversation.id,
+                        title=new_title,
+                        user_id=current_user.id,  # type: ignore
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Error al generar/actualizar título de conversación: {e}"
+                )
 
         logger.info(
             f"Chat completado: conversación {conversation.id}, modelo {model_used}"

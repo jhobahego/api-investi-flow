@@ -286,7 +286,7 @@ class BibliographyRequest(BaseModel):
         ...,
         description="Consulta de búsqueda para encontrar fuentes relevantes",
         min_length=3,
-        max_length=500,
+        max_length=2000,
     )
     max_results: int = Field(
         10, description="Número máximo de resultados a devolver", ge=1, le=20

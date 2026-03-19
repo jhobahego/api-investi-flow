@@ -5,6 +5,7 @@ API REST desarrollada con FastAPI para la plataforma de gestión de proyectos de
 ## 🚀 Inicio Rápido
 
 ### Opción 1: Docker (Recomendado) 🐳
+
 ```bash
 git clone https://github.com/jhobahego/api-investi-flow.git
 cd investi-flow-api
@@ -15,6 +16,7 @@ docker compose up -d
 ```
 
 ### Opción 2: Make + Docker ⚡
+
 ```bash
 git clone https://github.com/jhobahego/api-investi-flow.git
 cd investi-flow-api
@@ -25,6 +27,7 @@ make docker-up
 ```
 
 ### Opción 3: Desarrollo Local 🛠️
+
 ```bash
 git clone https://github.com/jhobahego/api-investi-flow.git
 cd investi-flow-api
@@ -40,19 +43,22 @@ uvicorn main:app --reload
 ## 🎯 Estado del Proyecto
 
 ### ✅ **Sprint 1 Completado** (07/08/2025 – 15/08/2025)
+
 - ✅ **Sistema de Autenticación**: Registro, login, logout con JWT
 - ✅ **Gestión de Proyectos**: CRUD completo con autorización
 - ✅ **Base de Datos**: PostgreSQL con migraciones Alembic
 - ✅ **Testing**: Suite completa con pytest (auth, projects, users)
 - ✅ **Arquitectura**: 4 capas (API → Services → Repositories → Models)
 
-### 🚧 **Sprint 2 - En Preparación** (16/08/2025 – 03/09/2025)
-- 📄 **Gestión de Documentos**: Upload, download, validaciones
-- 🔍 **Sistema de Búsqueda**: Proyectos, documentos, filtros
+### ✅ **Sprint 2 Completado** (16/08/2025 – 06/11/2025)
 
-### ⏳ **Sprint 3 - Planificado** (04/09/2025 – 17/09/2025)
-- 🤖 **Asistente IA**: Análisis de documentos, chat inteligente
-- 📊 **Exportación**: Proyectos a PDF
+- ✅ **Gestión de Documentos**: Upload, download, validaciones y previsualización
+- ✅ **Sistema de Búsqueda**: Proyectos, documentos, filtros
+
+### ✅ **Sprint 3 Completado** (04/09/2025 – 03/12/2025)
+
+- ✅ **Asistente IA**: Análisis de documentos, chat inteligente con memoria, sugerencias, búsqueda de bibliografía y citaciones
+- ⏸️ **Exportación**: Proyectos a PDF *(Pospuesto para futuras versiones)*
 
 ## 🛠️ Tecnologías
 
@@ -78,26 +84,45 @@ make docker-up      # Levantar servicios con Docker
 make docker-logs    # Ver logs en tiempo real
 ```
 
-## 🔗 API Endpoints
+## 🔗 API Endpoints Destacados
 
 ### Autenticación
+
 - `POST /api/v1/auth/register` - Registro de usuarios
 - `POST /api/v1/auth/login` - Inicio de sesión
 - `POST /api/v1/auth/logout` - Cierre de sesión
+- `POST /api/v1/auth/refresh` - Refrescar token
 
 ### Proyectos
-- `GET /api/v1/proyectos` - Listar proyectos del usuario
+
+- `GET /api/v1/proyectos` - Listar y buscar proyectos (con filtros)
 - `POST /api/v1/proyectos` - Crear nuevo proyecto
 - `GET /api/v1/proyectos/{id}` - Obtener proyecto específico
 - `PUT /api/v1/proyectos/{id}` - Actualizar proyecto
 - `DELETE /api/v1/proyectos/{id}` - Eliminar proyecto
 
-### Documentos 📄 **NUEVO**
+### Fases y Tareas
+
+- `GET /api/v1/proyectos/{id}/fases` - Listar fases de un proyecto
+- `POST /api/v1/proyectos/{id}/fases` - Crear nueva fase
+- `GET /api/v1/fases/{id}/tareas` - Listar tareas de una fase
+- `POST /api/v1/fases/{id}/tareas` - Crear nueva tarea
+- `PUT /api/v1/tareas/{id}/estado` - Cambiar estado de una tarea
+
+### Documentos y Adjuntos
+
+- `POST /api/v1/adjuntos` - Subir nuevo documento (soporta .pdf, .docx, etc.)
+- `GET /api/v1/adjuntos/{id}/download` - Descargar documento
 - `GET /api/v1/documentos/{id}/extract-content` - Extraer contenido de .docx a HTML
-- `GET /api/v1/documentos/{id}/preview` - Vista previa de documento
+- `POST /api/v1/documentos/update-docx` - Actualizar contenido HTML a documento .docx
 
 ### Asistente IA 🤖
-- `POST /api/v1/ia/sugerencias` - Obtener sugerencias de IA para documentos
+
+- `POST /api/v1/proyectos/{id}/ia/sugerencias` - Obtener sugerencias de autocompletado para textos
+- `POST /api/v1/proyectos/{id}/chat` - Chat interactivo y contextual con IA (con memoria)
+- `POST /api/v1/proyectos/{id}/ia/bibliografias` - Buscar y sugerir referencias bibliográficas reales (Formato JSON y verificado)
+- `POST /api/v1/proyectos/{id}/ia/citaciones` - Formatear citas según norma APA 7
+- `GET /api/v1/proyectos/{id}/conversaciones` - Listar historial de conversaciones del chat
 
 ## 📚 Documentación Completa
 
@@ -111,6 +136,7 @@ make docker-logs    # Ver logs en tiempo real
 ## 🏗️ Arquitectura
 
 **Arquitectura en 4 Capas** (API → Services → Repositories → Models):
+
 - **API**: Endpoints FastAPI con validación Pydantic
 - **Services**: Lógica de negocio y orquestación
 - **Repositories**: Acceso a datos y queries optimizadas
@@ -118,11 +144,11 @@ make docker-logs    # Ver logs en tiempo real
 
 ## 📊 Métricas del Proyecto
 
-- **Endpoints**: 8 endpoints principales implementados
-- **Modelos**: 2 modelos principales (User, Project) con relaciones
-- **Tests**: 3 suites completas (auth, projects, users)
+- **Endpoints**: 47 endpoints principales implementados
+- **Modelos**: 9 modelos relacionales (User, Project, Phase, Task, Attachment, Bibliography, Conversation, etc.)
+- **Tests**: Suites exhaustivas probando AI, Auth, Projects, Documents y Utils (>40 tests unitarios y de integración)
 - **Cobertura**: >85% código cubierto por tests
-- **Migraciones**: 3 migraciones de base de datos ejecutadas
+- **Migraciones**: 8 migraciones de base de datos ejecutadas en revisiones mediante Alembic
 
 ## 🤝 Contribuir
 
@@ -136,6 +162,6 @@ make docker-logs    # Ver logs en tiempo real
 
 ---
 
-**📅 Última actualización**: 15 de agosto de 2025
-**🚀 Estado**: Sprint 1 Completado - Sistema core funcionando
-**🎯 Próximo hito**: Sprint 2 - Documentos y búsqueda (16/08 - 03/09)
+**📅 Última actualización**: 19 de marzo de 2026
+**🚀 Estado**: Todos los sprints (1, 2, y 3) han sido completados exitosamente. Las integraciones de IA (módulo principal del Sprint 3) ya están activas en producción.
+**🎯 Próximo hito**: Refinamiento general, corrección de bugs menores y soporte a exportación de bibliografía o PDF pospuestos para un futuro release (TBD).

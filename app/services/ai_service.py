@@ -17,6 +17,7 @@ from app.core.ai_prompts import (
     CHAT_SYSTEM_PROMPT,
     CITATIONS_SYSTEM_PROMPT,
     SUGGESTIONS_SYSTEM_PROMPT,
+    TITLE_GENERATION_PROMPT,
 )
 from app.core.config import settings
 
@@ -561,6 +562,54 @@ class AIService:
         except Exception:
             return "Fuente web"
 
+    def generate_conversation_title(self, message: str, response: str) -> str | None:
+        """
+        Genera un título corto para una conversación basado en el primer mensaje y su respuesta.
+
+        Args:
+            message: El mensaje del usuario
+            response: La respuesta del asistente
+
+        Returns:
+            str | None: El título generado, o None si ocurre un error
+        """
+        try:
+            # Usar siempre el modelo de CHAT (típicamente más rápido/barato)
+            model_name = settings.AI_MODEL_CHAT
+
+            prompt = TITLE_GENERATION_PROMPT.format(
+                user_message=message, assistant_response=response
+            )
+
+            # Generamos con una temperatura baja y pocos tokens
+            title_config = types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=60,
+            )
+
+            result = self.client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=title_config,
+            )
+
+            if not result or not result.text:
+                return None
+
+            title = result.text.strip()
+            # Limpiar posible puntuación o comillas extra que el modelo pueda agregar
+            title = title.strip('".')
+
+            # Limitar a los requerimientos de BD (max 255)
+            if len(title) > 250:
+                title = title[:247] + "..."
+
+            return title
+
+        except Exception as e:
+            logger.error(f"Error generando título de conversación: {str(e)}")
+            return None
+
     def check_api_health(self) -> bool:
         """
         Verifica que la API de Gemini esté funcionando correctamente.
@@ -571,7 +620,7 @@ class AIService:
         try:
             # Intentar una generación simple como health check
             test_response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp",
+                model=settings.AI_MODEL_CHAT,
                 contents="Hello, test API health check",
                 config=types.GenerateContentConfig(
                     temperature=0.1,
