@@ -353,3 +353,20 @@ def format_chat_history(messages: list) -> list:
         formatted_messages.append({"role": role, "parts": [{"text": content}]})
 
     return formatted_messages
+
+
+# =============================================================================
+# PROMPT PARA GENERAR TÍTULOS DE CONVERSACIONES
+# =============================================================================
+TITLE_GENERATION_PROMPT = """Genera un título breve (máximo 8 palabras) que resuma el tema principal de la siguiente conversación.
+INSTRUCCIONES:
+- Responde ÚNICAMENTE con el título, sin explicaciones
+- Sin comillas, sin puntos finales
+- Máximo 8 palabras
+- En el mismo idioma del mensaje
+
+MENSAJE DEL USUARIO: {user_message}
+
+RESPUESTA DEL ASISTENTE: {assistant_response}
+
+TÍTULO:"""

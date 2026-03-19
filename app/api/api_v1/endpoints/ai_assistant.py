@@ -770,7 +770,7 @@ async def delete_conversation(
     - Retorna la respuesta del asistente y el ID de la conversación.
     """,
 )
-async def chat_with_persistent_history(
+async def chat_with_persistent_history(  # noqa: C901
     project_id: int,
     request: ChatWithHistoryRequest,
     current_user: User = Depends(get_current_user),
@@ -892,6 +892,24 @@ async def chat_with_persistent_history(
             content=response_text,
             model_used=model_used,
         )
+
+        # Generar título para conversaciones nuevas si no se proporcionó uno
+        if not request.conversation_id and not request.title:
+            try:
+                new_title = ai_service.generate_conversation_title(
+                    message=request.message, response=response_text
+                )
+                if new_title:
+                    conversation_repository.update_title(
+                        db,
+                        conversation_id=conversation.id,
+                        title=new_title,
+                        user_id=current_user.id,  # type: ignore
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Error al generar/actualizar título de conversación: {e}"
+                )
 
         logger.info(
             f"Chat completado: conversación {conversation.id}, modelo {model_used}"
