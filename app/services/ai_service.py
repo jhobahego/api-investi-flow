@@ -43,13 +43,14 @@ class AIService:
 
     def __init__(self):
         """Inicializa el servicio de IA con la API de Gemini"""
-        if not settings.GOOGLE_AI_API_KEY:
+        api_key = settings.get_google_ai_api_key()
+        if not api_key:
             raise AIServiceError(
                 "GOOGLE_AI_API_KEY no está configurada en las variables de entorno"
             )
 
         # Inicializar el cliente de Gemini con la nueva API
-        self.client = genai.Client(api_key=settings.GOOGLE_AI_API_KEY)
+        self.client = genai.Client(api_key=api_key)
 
         # Configuración de seguridad usando la nueva API
         self.safety_settings = [
