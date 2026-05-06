@@ -3,6 +3,7 @@ Schemas para conversaciones y mensajes de chat
 """
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -96,6 +97,23 @@ class ConversationListResponse(ConversationBase):
 # =============================================================================
 
 
+class ProjectContextField(BaseModel):
+    """Contexto del proyecto para el chat"""
+
+    project_id: int | None = Field(None, description="ID del proyecto")
+    title: str | None = Field(None, description="Título del proyecto")
+    description: str | None = Field(None, description="Descripción del proyecto")
+    fases: list[Any] | None = Field(
+        None, description="Fases del proyecto con tareas y documentos"
+    )
+    bibliografia: list[Any] | None = Field(
+        None, description="Bibliografía del proyecto"
+    )
+    attachment_document: list[Any] | None = Field(
+        None, description="Documentos adjuntos del proyecto"
+    )
+
+
 class ChatWithHistoryRequest(BaseModel):
     """Request para chat con historial persistente"""
 
@@ -106,6 +124,10 @@ class ChatWithHistoryRequest(BaseModel):
     )
     title: str | None = Field(
         None, description="Título para nueva conversación (opcional)"
+    )
+    project_context: ProjectContextField | None = Field(
+        None,
+        description="Contexto del proyecto (fases, tareas, etc.) para enriquecer el chat",
     )
 
 
