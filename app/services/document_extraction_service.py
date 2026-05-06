@@ -15,6 +15,16 @@ except ImportError:
         "python-docx no está instalado. " "Ejecuta: pip install python-docx"
     )
 
+try:
+    import PyPDF2
+except ImportError:
+    import logging
+
+    logging.warning(
+        "PyPDF2 no está instalado. El soporte para PDF estará deshabilitado. Ejecuta: pip install PyPDF2"
+    )
+    PyPDF2 = None
+
 from fastapi import HTTPException
 
 
@@ -449,25 +459,56 @@ class DocumentExtractionService:
         return grouped
 
     @staticmethod
+    def extract_pdf_to_text(file_path: str, max_chars: int = 50000) -> str:
+        """Extrae el texto de un archivo PDF hasta un máximo de caracteres."""
+        if not PyPDF2:
+            return "Error: Soporte para PDF no instalado."
+        try:
+            text = ""
+            with open(file_path, "rb") as file:
+                reader = PyPDF2.PdfReader(file)
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+                    if len(text) > max_chars:
+                        return text[:max_chars] + "..."
+            return text
+        except Exception as e:
+            return f"Error al extraer PDF: {str(e)}"
+
+    @staticmethod
     def get_document_preview(file_path: str, max_chars: int = 200) -> str:
         """
         Obtiene una vista previa del contenido del documento (texto plano)
 
         Args:
-            file_path: Ruta al archivo .docx
+            file_path: Ruta al archivo .docx o .pdf
             max_chars: Número máximo de caracteres para la vista previa
 
         Returns:
             str: Vista previa del documento
         """
+        path = Path(file_path)
+
+        if not path.exists():
+            return f"Error: Archivo no encontrado en ruta {file_path}"
+
         try:
-            document = Document(file_path)
-            full_text = "\n".join([para.text for para in document.paragraphs])
+            if path.suffix.lower() == ".pdf":
+                return DocumentExtractionService.extract_pdf_to_text(
+                    file_path, max_chars
+                )
+            elif path.suffix.lower() == ".docx":
+                document = Document(file_path)
+                full_text = "\n".join([para.text for para in document.paragraphs])
 
-            if len(full_text) <= max_chars:
-                return full_text
+                if len(full_text) <= max_chars:
+                    return full_text
 
-            return full_text[:max_chars] + "..."
+                return full_text[:max_chars] + "..."
+            else:
+                return f"Formato no soportado para previsualización: {path.suffix}"
 
         except Exception as e:
             return f"Error al obtener vista previa: {str(e)}"
