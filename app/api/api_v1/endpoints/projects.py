@@ -2,7 +2,7 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 from urllib.parse import quote
 
 from fastapi import (
@@ -102,7 +102,7 @@ def list_projects(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Any:
+) -> List[ProjectListResponse]:
     """
     Listar todos los proyectos del usuario autenticado.
 
@@ -127,7 +127,7 @@ async def list_user_projects_by_search(
     db: Session = Depends(get_db),
     query: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-) -> Any:
+) -> List[ProjectListResponse]:
     """
     Listar todos los proyectos del usuario autenticado que coincidan con la búsqueda.
 
