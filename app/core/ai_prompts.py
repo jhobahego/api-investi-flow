@@ -16,17 +16,20 @@ CONTEXTO DEL PROYECTO:
 {project_context}
 
 INSTRUCCIONES:
-- Proporciona respuestas claras, precisas y fundamentadas académicamente
-- Cita fuentes cuando sea apropiado
-- Utiliza un lenguaje profesional pero accesible
-- Si no estás seguro de algo, admítelo y sugiere cómo investigar más
-- Adapta tus respuestas al nivel académico del usuario
+- Proporciona respuestas claras, precisas y fundamentadas académicamente.
+- Cita fuentes de la bibliografía proporcionada cuando sea apropiado, utilizando activamente los nombres de los autores.
+- Si el contexto del proyecto incluye tareas o fases, úsalas en tus respuestas (ej. "Basado en tu tarea [nombre]...").
+- Si el contexto del proyecto incluye documentos adjuntos, menciona explícitamente contenido o nombres de archivos relevantes.
+- Utiliza un lenguaje profesional pero accesible.
+- Si no estás seguro de algo, admítelo y sugiere cómo investigar más.
+- Adapta tus respuestas al nivel académico del usuario.
+- Si la sección de CONTEXTO DEL PROYECTO está vacía o carece de información útil (sin fases, tareas o bibliografía), responde de forma general pero invita proactivamente al usuario a completar la información de su proyecto en la plataforma para ofrecerle ayuda personalizada.
 
 FORMATO DE RESPUESTA:
-- Usa markdown para formatear tu respuesta (negritas, listas, enlaces, etc.)
-- Estructura tus respuestas de forma clara con títulos si es necesario
-- Incluye ejemplos cuando ayude a la comprensión
-- Mantén un tono conversacional y amigable
+- Usa markdown para formatear tu respuesta (negritas, listas, enlaces, etc.).
+- Estructura tus respuestas de forma clara con títulos si es necesario.
+- Incluye ejemplos cuando ayude a la comprensión.
+- Mantén un tono conversacional y amigable.
 
 Responde siempre en el idioma en que te consultan (español por defecto).
 """
@@ -240,6 +243,8 @@ def format_project_context(
     objectives: str | None = None,
     documents_summary: str | None = None,
     bibliographies_summary: str | None = None,
+    fases_summary: str | None = None,
+    tareas_summary: str | None = None,
 ) -> str:
     """
     Formatea el contexto del proyecto para incluirlo en el prompt del chat.
@@ -251,6 +256,8 @@ def format_project_context(
         objectives: Objetivos del proyecto
         documents_summary: Resumen de documentos adjuntos
         bibliographies_summary: Resumen de bibliografías del proyecto
+        fases_summary: Resumen de las fases del proyecto
+        tareas_summary: Resumen de las tareas del proyecto
 
     Returns:
         str: Contexto formateado
@@ -266,9 +273,15 @@ def format_project_context(
     if objectives:
         context_parts.append(f"**Objetivos**: {objectives}")
 
+    if fases_summary:
+        context_parts.append(f"**Fases del Proyecto**: {fases_summary}")
+
+    if tareas_summary:
+        context_parts.append(f"**Tareas del Proyecto**: {tareas_summary}")
+
     if documents_summary:
         context_parts.append(
-            f"**Contenido del Documento Principal**: {documents_summary}"
+            f"**Contenido de Documentos Adjuntos**: {documents_summary}"
         )
 
     if bibliographies_summary:
