@@ -107,6 +107,29 @@ class TestFileUtils:
         with pytest.raises(FileValidationError, match="Tipo de archivo no permitido"):
             FileUtils.validate_file_type(mock_file)
 
+    @pytest.mark.parametrize(
+        "filename,content_type,expected_type",
+        [
+            ("document.PDF", "application/pdf", FileType.PDF),
+            (
+                "document.DOCX",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                FileType.DOCX,
+            ),
+            ("document.DOC", "application/msword", FileType.DOCX),
+        ],
+    )
+    def test_validate_file_type_case_insensitive_extension(
+        self, filename, content_type, expected_type
+    ):
+        """Probar validación con extensión en mayúsculas"""
+        mock_file = Mock(spec=UploadFile)
+        mock_file.filename = filename
+        mock_file.content_type = content_type
+
+        file_type = FileUtils.validate_file_type(mock_file)
+        assert file_type == expected_type
+
     def test_validate_file_type_invalid_mime_type(self):
         """Probar validación falla con MIME type inválido"""
         mock_file = Mock(spec=UploadFile)
