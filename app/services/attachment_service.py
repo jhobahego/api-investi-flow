@@ -320,20 +320,19 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
         Raises:
             HTTPException: Si la entidad no existe o no pertenece al usuario
         """
-        if parent_type == "project":
-            entity = self.project_repository.get(db, parent_id)
-            entity_name = "Proyecto"
-        elif parent_type == "phase":
-            entity = self.phase_repository.get(db, parent_id)
-            entity_name = "Fase"
-        elif parent_type == "task":
-            entity = self.task_repository.get(db, parent_id)
-            entity_name = "Tarea"
-        else:
+        entity_map = {
+            "project": (self.project_repository, "Proyecto"),
+            "phase": (self.phase_repository, "Fase"),
+            "task": (self.task_repository, "Tarea"),
+        }
+        if parent_type not in entity_map:
             raise HTTPException(
                 status_code=400,
                 detail="Tipo de entidad padre no válido. Use: 'project', 'phase' o 'task'",
             )
+
+        repository, entity_name = entity_map[parent_type]
+        entity = repository.get(db, parent_id)
 
         if not entity:
             raise HTTPException(status_code=404, detail=f"{entity_name} no encontrado")
@@ -346,34 +345,41 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
                     status_code=403,
                     detail=f"No tiene permisos para acceder a este {entity_name.lower()}",
                 )
-        elif parent_type == "phase":
+            return
+
+        if parent_type == "phase":
             # Para fases, verificar que el proyecto padre pertenezca al usuario
             if hasattr(entity, "project_id"):
                 project = self.project_repository.get(db, getattr(entity, "project_id"))
-                if not project or (
-                    hasattr(project, "owner_id")
-                    and getattr(project, "owner_id") != user_id
-                ):
-                    raise HTTPException(
-                        status_code=403,
-                        detail=f"No tiene permisos para acceder a esta {entity_name.lower()}",
-                    )
-        elif parent_type == "task":
-            # Para tareas, verificar que la fase padre pertenezca a un proyecto del usuario
-            if hasattr(entity, "phase_id"):
-                phase = self.phase_repository.get(db, getattr(entity, "phase_id"))
-                if phase and hasattr(phase, "project_id"):
-                    project = self.project_repository.get(
-                        db, getattr(phase, "project_id")
-                    )
-                    if not project or (
-                        hasattr(project, "owner_id")
-                        and getattr(project, "owner_id") != user_id
-                    ):
+                if project and hasattr(project, "owner_id"):
+                    if getattr(project, "owner_id") != user_id:
                         raise HTTPException(
                             status_code=403,
                             detail=f"No tiene permisos para acceder a esta {entity_name.lower()}",
                         )
+                elif not project:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"No tiene permisos para acceder a esta {entity_name.lower()}",
+                    )
+            return
+
+        # Para tareas, verificar que la fase padre pertenezca a un proyecto del usuario
+        if hasattr(entity, "phase_id"):
+            phase = self.phase_repository.get(db, getattr(entity, "phase_id"))
+            if phase and hasattr(phase, "project_id"):
+                project = self.project_repository.get(db, getattr(phase, "project_id"))
+                if project and hasattr(project, "owner_id"):
+                    if getattr(project, "owner_id") != user_id:
+                        raise HTTPException(
+                            status_code=403,
+                            detail=f"No tiene permisos para acceder a esta {entity_name.lower()}",
+                        )
+                elif not project:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"No tiene permisos para acceder a esta {entity_name.lower()}",
+                    )
 
     def _get_parent_info(self, attachment: Attachment) -> tuple[str, int]:
         """
@@ -404,14 +410,15 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
         Returns:
             str: Forma plural
         """
-        if parent_type == "project":
-            return "projects"
-        elif parent_type == "phase":
-            return "phases"
-        elif parent_type == "task":
-            return "tasks"
-        else:
-            raise ValueError(f"Tipo de padre no válido: {parent_type}")
+        parent_type_map = {
+            "project": "projects",
+            "phase": "phases",
+            "task": "tasks",
+        }
+        try:
+            return parent_type_map[parent_type]
+        except KeyError as exc:
+            raise ValueError(f"Tipo de padre no válido: {parent_type}") from exc
 
     def _save_file(self, file: UploadFile, file_path: str) -> None:
         """
