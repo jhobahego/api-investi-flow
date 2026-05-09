@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.task import TaskStatus
 
@@ -112,7 +112,7 @@ class TaskResponse(TaskBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskListResponse(BaseModel):
@@ -129,16 +129,12 @@ class TaskListResponse(BaseModel):
     phase_id: int
     created_at: datetime
 
-    model_config = {"from_attributes": True}
-
 
 # Esquema con relaciones anidadas
 class TaskDetailResponse(TaskResponse):
     """Esquema de respuesta completo para tarea con todas sus relaciones"""
 
     attachment: Optional["AttachmentResponse"] = None
-
-    model_config = {"from_attributes": True}
 
 
 class TaskDataToMovePhase(BaseModel):
