@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .attachment import AttachmentResponse
 from .task import TaskListResponse
@@ -98,7 +98,7 @@ class PhaseResponse(PhaseBase):
     id: int
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PhaseListResponse(BaseModel):
@@ -110,8 +110,6 @@ class PhaseListResponse(BaseModel):
     color: Optional[str]
     project_id: int
 
-    model_config = {"from_attributes": True}
-
 
 # Esquemas con relaciones anidadas
 class PhaseWithTasksResponse(PhaseResponse):
@@ -119,13 +117,9 @@ class PhaseWithTasksResponse(PhaseResponse):
 
     tasks: List["TaskListResponse"] = Field(default_factory=list)
 
-    model_config = {"from_attributes": True}
-
 
 class PhaseDetailResponse(PhaseResponse):
     """Esquema de respuesta completo para fase con todas sus relaciones"""
 
     tasks: List["TaskListResponse"] = Field(default_factory=list)
     attachment: Optional["AttachmentResponse"] = None
-
-    model_config = {"from_attributes": True}

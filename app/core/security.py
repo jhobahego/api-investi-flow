@@ -25,9 +25,7 @@ def create_access_token(
         )
     to_encode = {"exp": expire, "sub": str(subject)}
 
-    secret_key = settings.SECRET_KEY
-    if secret_key is None:
-        raise ValueError("SECRET_KEY is not set in the configuration.")
+    secret_key = settings.require_secret_key()
 
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -40,9 +38,7 @@ def create_refresh_token(subject: Union[str, Any]) -> str:
     )
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
 
-    secret_key = settings.SECRET_KEY
-    if secret_key is None:
-        raise ValueError("SECRET_KEY is not set in the configuration.")
+    secret_key = settings.require_secret_key()
 
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -51,9 +47,7 @@ def create_refresh_token(subject: Union[str, Any]) -> str:
 def verify_token(token: str) -> str | None:
     """Verificar y decodificar un token JWT"""
     try:
-        secret_key = settings.SECRET_KEY
-        if secret_key is None:
-            raise ValueError("SECRET_KEY is not set in the configuration.")
+        secret_key = settings.require_secret_key()
 
         payload = jwt.decode(token, secret_key, algorithms=[settings.ALGORITHM])
         email = payload.get("sub")
