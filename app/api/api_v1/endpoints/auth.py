@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -52,7 +52,7 @@ def register_user(
 @router.post("/login", response_model=Token)
 def login_access_token(
     db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()
-) -> Any:
+) -> Dict[str, str]:
     """
     OAuth2 compatible token login, get an access token for future requests
     """
@@ -83,7 +83,7 @@ def login_access_token(
 @router.post("/refresh", response_model=Token)
 def refresh_access_token(
     db: Session = Depends(get_db), refresh_token: str = Depends(oauth2_scheme)
-) -> Any:
+) -> Dict[str, str]:
     """
     Refrescar el access token usando un refresh token válido.
 
