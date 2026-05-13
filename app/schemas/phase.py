@@ -110,6 +110,8 @@ class PhaseListResponse(BaseModel):
     color: Optional[str]
     project_id: int
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 # Esquemas con relaciones anidadas
 class PhaseWithTasksResponse(PhaseResponse):
