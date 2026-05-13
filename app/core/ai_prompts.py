@@ -40,8 +40,11 @@ Responde siempre en el idioma en que te consultan (español por defecto).
 SUGGESTIONS_SYSTEM_PROMPT = """Eres un asistente de escritura académica especializado en redacción científica.
 Tu función es sugerir continuaciones coherentes y académicamente rigurosas del texto que el usuario está escribiendo.
 
-CONTEXTO DEL PROYECTO:
+CONTEXTO GENERAL DEL PROYECTO:
 {project_context}
+
+CONTEXTO JERÁRQUICO DE LA TAREA ACTUAL:
+{hierarchical_context}
 
 BIBLIOGRAFÍA DISPONIBLE:
 {bibliography_context}
@@ -56,6 +59,7 @@ INSTRUCCIONES CRÍTICAS:
 - Mantén el estilo académico y formal consistente con el documento
 - La continuación debe fluir naturalmente después del texto del usuario
 - Respeta el contexto, temática y argumentación del documento completo
+- Utiliza la información del CONTEXTO JERÁRQUICO (Fase y Tarea actual) para enfocar tu sugerencia en el objetivo inmediato del usuario.
 - Si mencionas datos, teorías o conceptos, PRIORIZA citar las fuentes de la bibliografía disponible
 - Limita tu sugerencia a 2-4 oraciones relevantes y coherentes
 - PUEDES usar saltos de línea (\n\n) cuando sea necesario para:
@@ -296,7 +300,8 @@ def format_bibliography_context(bibliography_list: list[dict] | None = None) -> 
 
     Args:
         bibliography_list: Lista de referencias bibliográficas del proyecto.
-                          Cada item debe tener: {autores, año, titulo, tipo}
+                          Puede soportar tanto la estructura de Citas ({autores, anio, titulo, tipo})
+                          como la nueva estructura de Sugerencias ({author, title, file_type, file_name, anio}).
 
     Returns:
         str: Bibliografía formateada para el contexto del prompt
@@ -306,15 +311,54 @@ def format_bibliography_context(bibliography_list: list[dict] | None = None) -> 
 
     formatted_refs = []
     for idx, ref in enumerate(bibliography_list, 1):
-        autores = ref.get("autores", "Autor desconocido")
+        # Soportar ambas estructuras
+        autores = ref.get("author") or ref.get("autores", "Autor desconocido")
         anio = ref.get("anio", "s.f.")
-        titulo = ref.get("titulo", "Sin título")
-        tipo = ref.get("tipo", "documento")
+        titulo = ref.get("title") or ref.get("titulo", "Sin título")
+        tipo = ref.get("file_type") or ref.get("tipo", "documento")
 
         # Formato abreviado para el contexto
         formatted_refs.append(f"{idx}. {autores} ({anio}). {titulo} [{tipo}]")
 
     return "\n".join(formatted_refs)
+
+
+def format_hierarchical_context(current_context: dict | None = None) -> str:
+    """
+    Formatea el contexto jerárquico (Fase actual y Tarea actual) para dar más precisión a la IA.
+
+    Args:
+        current_context: Diccionario con la fase y la tarea actual.
+
+    Returns:
+        str: Texto estructurado explicando el estado actual del flujo.
+    """
+    if not current_context:
+        return "No hay contexto de fase o tarea disponible."
+
+    context_parts = []
+
+    phase = current_context.get("phase")
+    if phase:
+        phase_name = phase.get("name", "Desconocida")
+        context_parts.append(f"**Fase Actual**: {phase_name}")
+
+    task = current_context.get("task")
+    if task:
+        task_name = task.get("name", "Desconocida")
+        task_desc = task.get("description", "Sin descripción")
+        context_parts.append(f"**Tarea Actual**: {task_name}")
+        context_parts.append(f"**Descripción de la Tarea**: {task_desc}")
+
+        editing_file = task.get("current_editing_file")
+        if editing_file:
+            file_name = editing_file.get("file_name", "Desconocido")
+            context_parts.append(f"**Editando Archivo de Tarea**: {file_name}")
+
+    if not context_parts:
+        return "El contexto de fase/tarea está vacío."
+
+    return "\n".join(context_parts)
 
 
 def format_document_content(content: str, max_length: int = 5000) -> str:

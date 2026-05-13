@@ -212,6 +212,7 @@ class AIService:
         document_content: str,
         bibliography: list[dict] | None = None,
         project_context: str | None = None,
+        current_context: dict | None = None,
         plan: UserPlan = UserPlan.ESTUDIANTE,
     ) -> tuple[str, str]:
         """
@@ -222,6 +223,7 @@ class AIService:
             document_content: Contenido completo del documento
             bibliography: Lista de referencias bibliográficas del proyecto
             project_context: Contexto del proyecto formateado
+            current_context: Contexto jerárquico (fase, tarea actual)
             plan: Plan del usuario (por defecto ESTUDIANTE)
 
         Returns:
@@ -234,18 +236,21 @@ class AIService:
             from app.core.ai_prompts import (
                 format_bibliography_context,
                 format_document_content,
+                format_hierarchical_context,
             )
 
             model_name, config = self._get_config(AIFeature.SUGGESTIONS, plan)
 
             # Formatear contextos
             project_ctx = project_context or "Proyecto sin información específica"
+            hierarchical_ctx = format_hierarchical_context(current_context)
             bibliography_ctx = format_bibliography_context(bibliography)
             document_ctx = format_document_content(document_content)
 
             # Construir el prompt con todos los contextos
             prompt = SUGGESTIONS_SYSTEM_PROMPT.format(
                 project_context=project_ctx,
+                hierarchical_context=hierarchical_ctx,
                 bibliography_context=bibliography_ctx,
                 document_content=document_ctx,
             )

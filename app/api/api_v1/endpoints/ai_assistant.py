@@ -60,6 +60,7 @@ project_router = APIRouter()
     - El contenido completo del documento
     - La bibliografía disponible en el proyecto (opcional)
     - Información del proyecto (opcional)
+    - Contexto jerárquico (fase, tarea, archivo en edición) (opcional)
 
     Devuelve una sugerencia de continuación coherente y académica que puede
     incluir citaciones de las fuentes bibliográficas proporcionadas.
@@ -92,7 +93,7 @@ async def generate_suggestion(
     Genera sugerencias de texto basadas en el contexto del documento.
 
     Args:
-        request: Datos de la solicitud (texto, documento, bibliografía)
+        request: Datos de la solicitud (texto, documento, bibliografía, contexto)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -110,13 +111,17 @@ async def generate_suggestion(
         user_plan = UserPlan.ESTUDIANTE  # Hardcodeado temporalmente
 
         # Formatear contexto del proyecto si está disponible
-        project_context = None
+        project_context_str = None
         if request.project_info:
-            project_context = format_project_context(
-                project_name=request.project_info.get("name", "Proyecto sin nombre"),
-                description=request.project_info.get("description"),
-                research_type=request.project_info.get("research_type"),
+            project_context_str = format_project_context(
+                project_name=request.project_info.project_name,
+                description=request.project_info.description,
             )
+
+        # Extraer el contexto actual
+        current_context_dict = (
+            request.current_context.model_dump() if request.current_context else None
+        )
 
         # Convertir bibliografía a formato dict
         bibliography_list = (
@@ -127,10 +132,11 @@ async def generate_suggestion(
 
         # Llamar al servicio de IA
         suggestion, model_used = await ai_service.suggest_text(
-            text=request.text,
-            document_content=request.document_content,
+            text=request.editor_state.text,
+            document_content=request.editor_state.full_document_content,
             bibliography=bibliography_list,
-            project_context=project_context,
+            project_context=project_context_str,
+            current_context=current_context_dict,
             plan=user_plan,
         )
 

@@ -86,45 +86,188 @@ class BibliographyReference(BaseModel):
     tipo: str = Field(..., description="Tipo de fuente (libro, articulo, etc.)")
 
 
-class SuggestionRequest(BaseModel):
-    """Request para el endpoint de sugerencias de texto"""
+class SuggestionAttachment(BaseModel):
+    """Esquema unificado para archivos adjuntos en el contexto"""
+
+    id: int = Field(..., description="Identificador único del archivo")
+    task_id: int | None = Field(None, description="ID de la tarea a la que pertenece")
+    phase_id: int | None = Field(None, description="ID de la fase a la que pertenece")
+    project_id: int | None = Field(None, description="ID del proyecto al que pertenece")
+    file_name: str = Field(..., description="Nombre del archivo con extensión")
+    file_type: str = Field(
+        ..., description="Tipo/extensión del archivo (ej. docx, pdf)"
+    )
+    file_path: str = Field(..., description="Ruta física del archivo en el servidor")
+
+
+class SuggestionEditorState(BaseModel):
+    """Estado actual del editor donde se solicita la sugerencia"""
 
     text: str = Field(
         ...,
-        description="Texto actual donde el usuario solicita la sugerencia",
+        description="Texto actual donde el usuario solicita la sugerencia (cursor o selección)",
         min_length=1,
         max_length=1000,
     )
-    document_content: str = Field(
+    full_document_content: str = Field(
         ...,
         description="Contenido completo del documento hasta el momento",
         max_length=20000,
     )
-    bibliography: list[BibliographyReference] = Field(
-        default_factory=list,
-        description="Bibliografía disponible en el proyecto para citaciones",
+
+
+class SuggestionBibliography(BaseModel):
+    """Referencia bibliográfica estructurada para sugerencias"""
+
+    id: int = Field(..., description="Identificador único de la referencia")
+    project_id: int = Field(..., description="ID del proyecto al que pertenece")
+    title: str = Field(..., description="Título de la fuente")
+    author: str = Field(..., description="Autores de la fuente")
+    anio: int | None = Field(
+        None, description="Año de publicación (opcional pero recomendado para citar)"
     )
-    project_info: dict[str, Any] | None = Field(
-        None, description="Información del proyecto (nombre, descripción, tipo, etc.)"
+    file_name: str = Field(..., description="Nombre del archivo de la bibliografía")
+    file_type: str = Field(
+        ..., description="Tipo/extensión del archivo de bibliografía"
+    )
+    file_path: str = Field(..., description="Ruta física del archivo de bibliografía")
+
+
+class SuggestionProjectInfo(BaseModel):
+    """Información general del proyecto para dar contexto"""
+
+    project_id: int = Field(..., description="ID del proyecto")
+    project_name: str = Field(..., description="Nombre del proyecto")
+    description: str | None = Field(None, description="Descripción del proyecto")
+    attachment_document: SuggestionAttachment | None = Field(
+        None, description="Documento principal/final del proyecto"
+    )
+
+
+class SuggestionPhaseContext(BaseModel):
+    """Contexto de la fase actual del proyecto"""
+
+    id: int = Field(..., description="ID de la fase")
+    name: str = Field(..., description="Nombre de la fase")
+    attachment_document: SuggestionAttachment | None = Field(
+        None, description="Documento base de esta fase"
+    )
+
+
+class SuggestionTaskContext(BaseModel):
+    """Contexto de la tarea actual"""
+
+    id: int = Field(..., description="ID de la tarea")
+    name: str = Field(..., description="Nombre de la tarea")
+    description: str | None = Field(None, description="Descripción de la tarea")
+    attachment_document: SuggestionAttachment | None = Field(
+        None, description="Documento adjunto a esta tarea"
+    )
+    current_editing_file: SuggestionAttachment | None = Field(
+        None, description="Archivo que se está editando actualmente (si aplica)"
+    )
+
+
+class SuggestionCurrentContext(BaseModel):
+    """Contexto jerárquico del editor (fase y tarea actual)"""
+
+    phase: SuggestionPhaseContext | None = Field(
+        None, description="Fase en la que se está trabajando"
+    )
+    task: SuggestionTaskContext | None = Field(
+        None, description="Tarea en la que se está trabajando"
+    )
+
+
+class SuggestionRequest(BaseModel):
+    """Nuevo Request estructurado para el endpoint de sugerencias de texto"""
+
+    editor_state: SuggestionEditorState = Field(
+        ..., description="Estado del editor y texto"
+    )
+    bibliography: list[SuggestionBibliography] = Field(
+        default_factory=list,
+        description="Bibliografía disponible en el proyecto para citaciones y RAG",
+    )
+    project_info: SuggestionProjectInfo | None = Field(
+        None, description="Información general del proyecto y su documento principal"
+    )
+    current_context: SuggestionCurrentContext | None = Field(
+        None,
+        description="Contexto jerárquico actual (Fase, Tarea, Documento en edición)",
     )
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "text": "Los resultados del experimento muestran que",
-                    "document_content": "# Introducción\n\nLa inteligencia artificial...\n\n# Metodología\n\n...\n\n# Resultados\n\nLos resultados del experimento muestran que",
+                    "editor_state": {
+                        "text": "Los resultados del experimento muestran que",
+                        "full_document_content": "# Introducción\n\nLa inteligencia artificial...\n\n# Resultados\n\nLos resultados del experimento muestran que",
+                    },
                     "bibliography": [
                         {
-                            "autores": "García, M. & López, A.",
+                            "id": 101,
+                            "project_id": 22,
+                            "title": "IA en educación superior",
+                            "author": "García, M. & López, A.",
                             "anio": 2023,
-                            "titulo": "IA en educación superior",
-                            "tipo": "articulo",
+                            "file_name": "uso-ia-educacion-superior.pdf",
+                            "file_type": "pdf",
+                            "file_path": "/storage/bibliographies/pdfs/uso-ia-educacion-superior.pdf",
                         }
                     ],
                     "project_info": {
-                        "name": "Impacto de la IA en educación",
-                        "research_type": "experimental",
+                        "project_id": 22,
+                        "project_name": "Uso de la IA para investigación en universidades",
+                        "description": "Investigación integral sobre el impacto de la IA en el entorno académico.",
+                        "attachment_document": {
+                            "id": 5,
+                            "task_id": None,
+                            "phase_id": None,
+                            "project_id": 22,
+                            "file_name": "Tesis_Final_Uso_IA_Universidades.docx",
+                            "file_type": "docx",
+                            "file_path": "/storage/projects/docs/Tesis_Final_Uso_IA_Universidades.docx",
+                        },
+                    },
+                    "current_context": {
+                        "phase": {
+                            "id": 2,
+                            "name": "Introducción",
+                            "attachment_document": {
+                                "id": 10,
+                                "task_id": None,
+                                "phase_id": 2,
+                                "project_id": 22,
+                                "file_name": "Uso-de-IA-en-Universidades-Introduccion.docx",
+                                "file_type": "docx",
+                                "file_path": "/storage/projects/docs/intro_base.docx",
+                            },
+                        },
+                        "task": {
+                            "id": 4,
+                            "name": "Buscar bibliografía",
+                            "description": "Tarea dedicada a la recopilación de fuentes académicas.",
+                            "attachment_document": {
+                                "id": 14,
+                                "task_id": 4,
+                                "phase_id": None,
+                                "project_id": None,
+                                "file_name": "Busqueda-de-Autores-para-Bibliografía.docx",
+                                "file_type": "docx",
+                                "file_path": "/storage/bibliographies/docs/busqueda-bibliografia.docx",
+                            },
+                            "current_editing_file": {
+                                "id": 14,
+                                "task_id": 4,
+                                "phase_id": None,
+                                "project_id": None,
+                                "file_name": "Busqueda-de-Autores-para-Bibliografía.docx",
+                                "file_type": "docx",
+                                "file_path": "/storage/bibliographies/docs/busqueda-bibliografia.docx",
+                            },
+                        },
                     },
                 }
             ]
