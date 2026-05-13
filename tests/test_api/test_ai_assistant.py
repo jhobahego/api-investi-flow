@@ -74,10 +74,12 @@ class TestSuggestions:
         response = client.post(
             "/api/v1/ia/sugerencias",
             json={
-                "text": "El machine learning es",
-                "document_content": "# Introducción\nEl machine learning es",
+                "editor_state": {
+                    "text": "El machine learning es",
+                    "full_document_content": "# Introducción\nEl machine learning es",
+                },
                 "bibliography": [],
-                "project_info": {"name": "Test Project"},
+                "project_info": {"project_id": 1, "project_name": "Test Project"},
             },
             headers=headers,
         )
@@ -103,14 +105,20 @@ class TestSuggestions:
         response = client.post(
             "/api/v1/ia/sugerencias",
             json={
-                "text": "El machine learning",
-                "document_content": "Documento completo",
+                "editor_state": {
+                    "text": "El machine learning",
+                    "full_document_content": "Documento completo",
+                },
                 "bibliography": [
                     {
-                        "titulo": "Machine Learning Basics",
-                        "autores": "Smith, J.",
+                        "id": 1,
+                        "project_id": 1,
+                        "title": "Machine Learning Basics",
+                        "author": "Smith, J.",
                         "anio": 2020,
-                        "tipo": "articulo",
+                        "file_name": "ml.pdf",
+                        "file_type": "pdf",
+                        "file_path": "/path/ml.pdf",
                     }
                 ],
             },
@@ -132,8 +140,10 @@ class TestSuggestions:
         response = client.post(
             "/api/v1/ia/sugerencias",
             json={
-                "text": "Test",
-                "document_content": "Test document",
+                "editor_state": {
+                    "text": "Test",
+                    "full_document_content": "Test document",
+                }
             },
             headers=headers,
         )
@@ -148,8 +158,10 @@ class TestSuggestions:
         response = client.post(
             "/api/v1/ia/sugerencias",
             json={
-                "text": "Test",
-                "document_content": "Test document",
+                "editor_state": {
+                    "text": "Test",
+                    "full_document_content": "Test document",
+                }
             },
         )
 

@@ -20,7 +20,9 @@ def mock_genai_client():
 @pytest.fixture
 def ai_service_instance(mock_genai_client):
     """Instancia del servicio de IA con cliente mockeado"""
-    with patch("app.core.config.settings.GOOGLE_AI_API_KEY", "test_api_key"):
+    mock_key = MagicMock()
+    mock_key.get_secret_value.return_value = "test_api_key"
+    with patch("app.core.config.settings.GOOGLE_AI_API_KEY", mock_key):
         service = AIService()
         return service
 
@@ -30,7 +32,9 @@ class TestAIService:
 
     def test_init_success(self, mock_genai_client):
         """Probar inicialización exitosa del servicio"""
-        with patch("app.core.config.settings.GOOGLE_AI_API_KEY", "test_api_key"):
+        mock_key = MagicMock()
+        mock_key.get_secret_value.return_value = "test_api_key"
+        with patch("app.core.config.settings.GOOGLE_AI_API_KEY", mock_key):
             service = AIService()
             assert service.client is not None
             assert service.safety_settings is not None
@@ -189,6 +193,7 @@ class TestAIService:
             document_content=document_content,
             bibliography=bibliography,
             project_context=project_context,
+            current_context=None,
         )
 
         assert suggestion == "Esta es una sugerencia de autocompletado"
@@ -207,7 +212,10 @@ class TestAIService:
 
         with pytest.raises(AIServiceError) as exc_info:
             await ai_service_instance.suggest_text(
-                text="Test", document_content="Content", bibliography=None
+                text="Test",
+                document_content="Content",
+                bibliography=None,
+                current_context=None,
             )
 
         assert "No se recibió sugerencia" in str(exc_info.value)
