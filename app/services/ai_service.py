@@ -395,7 +395,18 @@ class AIService:
                 contents=prompt,
                 config=config,
             )
-            if not response.text:
+
+            response_text = ""
+            if (
+                response.candidates
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            ):
+                for part in response.candidates[0].content.parts:
+                    if getattr(part, "text", None):
+                        response_text += part.text
+
+            if not response_text:
                 raise AIServiceError("No se recibió respuesta del modelo para búsqueda")
 
             # Extraer metadata de Grounding (URLs reales verificadas)
@@ -411,7 +422,7 @@ class AIService:
                     "No se recibió grounding_metadata, intentando parsear respuesta de texto"
                 )
                 # Fallback: intentar parsear la respuesta como JSON
-                sources = self._parse_text_sources(response.text, max_results)
+                sources = self._parse_text_sources(response_text, max_results)
 
             logger.info(
                 f"Búsqueda bibliográfica completada con {model_name} (Grounding activado), {len(sources)} fuentes encontradas"

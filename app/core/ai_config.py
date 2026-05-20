@@ -126,7 +126,7 @@ FEATURE_GENERATION_CONFIG: dict[AIFeature, dict[str, float | int]] = {
     },
     AIFeature.BIBLIOGRAPHY: {
         "temperature": 0.5,  # Moderada para búsqueda estructurada
-        "max_output_tokens": 4096,  # Múltiples fuentes
+        "max_output_tokens": 8192,  # Múltiples fuentes y espacio para razonamiento
     },
 }
 
