@@ -808,3 +808,191 @@ class TestAttachmentEndpoints:
         )
         assert response.status_code == 400
         assert "demasiado grande" in response.json()["detail"]
+
+    def test_replace_phase_document_not_found(self):
+        """Probar error 404 en fase al reemplazar sin adjunto previo"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+
+        file_data = self.create_test_pdf_file("replaced_phase.pdf")
+        response = client.put(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers,
+            files={"file": file_data},
+        )
+        assert response.status_code == 404
+        assert "No existe un documento adjunto" in response.json()["detail"]
+
+    def test_replace_phase_document_permission_denied(self):
+        """Probar error 403 en fase al reemplazar documento de otro usuario"""
+        headers1, _ = self.create_test_user_and_login(
+            "phase_user1@example.com", "+573001234993"
+        )
+        project = self.create_test_project(headers1)
+        phase = self.create_test_phase(headers1, project["id"])
+
+        file_data1 = self.create_test_pdf_file("original_phase.pdf")
+        client.post(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers1,
+            files={"file": file_data1},
+        )
+
+        headers2, _ = self.create_test_user_and_login(
+            "phase_user2@example.com", "+573001234994"
+        )
+        file_data2 = self.create_test_pdf_file("replaced_phase.pdf")
+        response = client.put(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers2,
+            files={"file": file_data2},
+        )
+        assert response.status_code == 403
+
+    def test_replace_phase_document_invalid_type(self):
+        """Probar error 400 en fase al reemplazar con tipo inválido"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+
+        file_data1 = self.create_test_pdf_file("original_phase.pdf")
+        client.post(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers,
+            files={"file": file_data1},
+        )
+
+        file_data2 = self.create_test_invalid_file("invalid_phase.txt")
+        response = client.put(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers,
+            files={"file": file_data2},
+        )
+        assert response.status_code == 400
+        assert "Tipo de archivo no permitido" in response.json()["detail"]
+
+    @patch("app.utils.file_utils.FileUtils.validate_file_size")
+    def test_replace_phase_document_file_too_large(self, mock_validate_size):
+        """Probar error 400 en fase al reemplazar con archivo muy grande"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+
+        file_data1 = self.create_test_pdf_file("original_phase.pdf")
+        client.post(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers,
+            files={"file": file_data1},
+        )
+
+        from app.utils.file_utils import FileValidationError
+
+        mock_validate_size.side_effect = FileValidationError(
+            "El archivo es demasiado grande"
+        )
+
+        file_data2 = self.create_test_pdf_file("large_phase.pdf")
+        response = client.put(
+            f"/api/v1/fases/{phase['id']}/documentos",
+            headers=headers,
+            files={"file": file_data2},
+        )
+        assert response.status_code == 400
+        assert "demasiado grande" in response.json()["detail"]
+
+    def test_replace_task_document_not_found(self):
+        """Probar error 404 en tarea al reemplazar sin adjunto previo"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+        task = self.create_test_task(headers, phase["id"])
+
+        file_data = self.create_test_pdf_file("replaced_task.pdf")
+        response = client.put(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers,
+            files={"file": file_data},
+        )
+        assert response.status_code == 404
+        assert "No existe un documento adjunto" in response.json()["detail"]
+
+    def test_replace_task_document_permission_denied(self):
+        """Probar error 403 en tarea al reemplazar documento de otro usuario"""
+        headers1, _ = self.create_test_user_and_login(
+            "task_user1@example.com", "+573001234995"
+        )
+        project = self.create_test_project(headers1)
+        phase = self.create_test_phase(headers1, project["id"])
+        task = self.create_test_task(headers1, phase["id"])
+
+        file_data1 = self.create_test_pdf_file("original_task.pdf")
+        client.post(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers1,
+            files={"file": file_data1},
+        )
+
+        headers2, _ = self.create_test_user_and_login(
+            "task_user2@example.com", "+573001234996"
+        )
+        file_data2 = self.create_test_pdf_file("replaced_task.pdf")
+        response = client.put(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers2,
+            files={"file": file_data2},
+        )
+        assert response.status_code == 403
+
+    def test_replace_task_document_invalid_type(self):
+        """Probar error 400 en tarea al reemplazar con tipo inválido"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+        task = self.create_test_task(headers, phase["id"])
+
+        file_data1 = self.create_test_pdf_file("original_task.pdf")
+        client.post(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers,
+            files={"file": file_data1},
+        )
+
+        file_data2 = self.create_test_invalid_file("invalid_task.txt")
+        response = client.put(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers,
+            files={"file": file_data2},
+        )
+        assert response.status_code == 400
+        assert "Tipo de archivo no permitido" in response.json()["detail"]
+
+    @patch("app.utils.file_utils.FileUtils.validate_file_size")
+    def test_replace_task_document_file_too_large(self, mock_validate_size):
+        """Probar error 400 en tarea al reemplazar con archivo muy grande"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+        phase = self.create_test_phase(headers, project["id"])
+        task = self.create_test_task(headers, phase["id"])
+
+        file_data1 = self.create_test_pdf_file("original_task.pdf")
+        client.post(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers,
+            files={"file": file_data1},
+        )
+
+        from app.utils.file_utils import FileValidationError
+
+        mock_validate_size.side_effect = FileValidationError(
+            "El archivo es demasiado grande"
+        )
+
+        file_data2 = self.create_test_pdf_file("large_task.pdf")
+        response = client.put(
+            f"/api/v1/tareas/{task['id']}/documentos",
+            headers=headers,
+            files={"file": file_data2},
+        )
+        assert response.status_code == 400
+        assert "demasiado grande" in response.json()["detail"]
