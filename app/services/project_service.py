@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 from fastapi import HTTPException, status
@@ -7,6 +8,8 @@ from app.models.project import Project
 from app.repositories.project_repository import project_repository
 from app.schemas.project import ProjectCreate, ProjectUpdate
 from app.services.base import BaseService
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
@@ -244,8 +247,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             )
             return projects
 
-        except Exception as e:
-            print(f"Error al buscar los proyectos: {str(e)}")
+        except Exception:
+            logger.exception("Error al buscar los proyectos")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al buscar los proyectos",

@@ -1,9 +1,12 @@
 import hashlib
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 from fastapi import (
     APIRouter,
@@ -263,7 +266,7 @@ async def get_project_with_phases(
         raise
 
     except Exception as e:
-        print(f"Error in get_project_with_phases: {str(e)}")
+        logger.exception("Error in get_project_with_phases")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al obtener el proyecto: {str(e)}",
@@ -438,8 +441,8 @@ async def download_project_document(
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"Error al descargar el documento: {e}")
+    except Exception:
+        logger.exception("Error al descargar el documento")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al descargar el documento",
