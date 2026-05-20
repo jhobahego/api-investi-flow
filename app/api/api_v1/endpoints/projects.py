@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
+from app.models.project import Project
 from app.models.user import User
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.project import (
@@ -155,7 +156,7 @@ async def list_user_projects_by_search(
     db: Session = Depends(get_db),
     query: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-) -> List[ProjectListResponse]:
+) -> List[type[ProjectListResponse]]:
     """
     Listar todos los proyectos del usuario autenticado que coincidan con la búsqueda.
 
