@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -5,6 +6,8 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
@@ -303,8 +306,8 @@ async def download_task_document(
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"Error al descargar el documento: {e}")
+    except Exception:
+        logger.exception("Error al descargar el documento")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al descargar el documento",

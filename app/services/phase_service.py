@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from fastapi import HTTPException, status
@@ -9,6 +10,8 @@ from app.repositories.phase_repository import phase_repository
 from app.repositories.project_repository import project_repository
 from app.schemas.phase import PhaseCreate, PhaseUpdate
 from app.services.base import BaseService
+
+logger = logging.getLogger(__name__)
 
 
 class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
@@ -38,7 +41,7 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
                 db=db, project_id=phase_in.project_id, owner_id=owner_id
             )
             if not project:
-                print(
+                logger.warning(
                     f"Proyecto con ID {phase_in.project_id} no encontrado para el usuario {owner_id}"
                 )
                 raise HTTPException(
@@ -79,8 +82,8 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
 
         except HTTPException:
             raise
-        except Exception as e:
-            print(f"Error al crear la fase: {str(e)}")
+        except Exception:
+            logger.exception("Error al crear la fase")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Ha ocurrido un error al crear la fase",
@@ -122,8 +125,8 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
         except HTTPException:
             raise
 
-        except Exception as e:
-            print(f"Error al obtener la fase con tareas: {str(e)}")
+        except Exception:
+            logger.exception("Error al obtener la fase con tareas")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Ha ocurrido un error al obtener la fase con tareas",
@@ -168,8 +171,8 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
         except HTTPException:
             raise
 
-        except Exception as e:
-            print(f"Error al obtener la fase: {str(e)}")
+        except Exception:
+            logger.exception("Error al obtener la fase")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Ha ocurrido un error al obtener la fase",
@@ -256,9 +259,9 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
 
         except HTTPException:
             raise
-        except Exception as e:
+        except Exception:
             db.rollback()
-            print(f"Error al actualizar la fase: {str(e)}")
+            logger.exception("Error al actualizar la fase")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Ha ocurrido un error al actualizar la fase",
@@ -287,9 +290,9 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
             phase_repository.delete_phase_and_update_positions(db=db, phase=phase)
             return True
 
-        except Exception as e:
+        except Exception:
             db.rollback()
-            print(f"Error al eliminar la fase: {str(e)}")
+            logger.exception("Error al eliminar la fase")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Ha ocurrido un error al eliminar la fase",
@@ -353,9 +356,9 @@ class PhaseService(BaseService[Phase, PhaseCreate, PhaseUpdate]):
 
         except HTTPException:
             raise
-        except Exception as e:
+        except Exception:
             db.rollback()
-            print(f"Error al reordenar las fases: {str(e)}")
+            logger.exception("Error al reordenar las fases")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Ha ocurrido un error al reordenar las fases",

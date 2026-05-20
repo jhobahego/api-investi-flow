@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,8 @@ from app.repositories.task_repository import TaskRepository
 from app.schemas.attachment import AttachmentCreate, AttachmentUpdate
 from app.services.base import BaseService
 from app.utils.file_utils import FileUtils, FileValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpdate]):
@@ -117,11 +120,11 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             db.refresh(attachment)
             return attachment
 
-        except Exception as e:
+        except Exception:
             # Si falla la creación en BD, eliminar el archivo
             FileUtils.delete_file(file_path)
             db.rollback()
-            print(f"Error al crear el registro del adjunto: {str(e)}")
+            logger.exception("Error al crear el registro del adjunto")
             raise HTTPException(
                 status_code=500,
                 detail="Error al crear el registro del adjunto",
@@ -330,11 +333,11 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             db.add(existing_attachment)
             db.commit()
             db.refresh(existing_attachment)
-        except Exception as e:
+        except Exception:
             # Eliminar el nuevo archivo que acabamos de guardar
             FileUtils.delete_file(new_file_path)
             db.rollback()
-            print(f"Error al actualizar el registro del adjunto: {str(e)}")
+            logger.exception("Error al actualizar el registro del adjunto")
             raise HTTPException(
                 status_code=500,
                 detail="Error al actualizar el registro del adjunto",
@@ -343,9 +346,7 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
         # 8. Luego de commit, borrar el archivo anterior
         if not FileUtils.delete_file(old_file_path):
             # No fallamos la petición si no se puede borrar el archivo anterior físico, pero lo logueamos.
-            print(
-                f"Advertencia: No se pudo eliminar el archivo anterior {old_file_path}"
-            )
+            logger.warning(f"No se pudo eliminar el archivo anterior {old_file_path}")
 
         return existing_attachment
 

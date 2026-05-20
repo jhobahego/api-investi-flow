@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "InvestiFlow API"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+    LOG_LEVEL: str = "INFO"
 
     # Database
     DATABASE_URL: Optional[str] = None  # Set via environment variable or .env file

@@ -5,6 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.api_v1.api import api_router
 from app.core.config import settings
+from app.core.logging import setup_logging
+from app.middleware import LoggingMiddleware
+
+# Inicializar configuración centralizada de logs
+setup_logging()
 
 app = FastAPI(
     title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"
@@ -20,6 +25,9 @@ if cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Registrar middleware de logging y request tracing
+app.add_middleware(LoggingMiddleware)
 
 
 @app.get("/")
