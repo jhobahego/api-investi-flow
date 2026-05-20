@@ -341,12 +341,10 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             )
 
         # 8. Luego de commit, borrar el archivo anterior
-        try:
-            FileUtils.delete_file(old_file_path)
-        except Exception as e:
+        if not FileUtils.delete_file(old_file_path):
             # No fallamos la petición si no se puede borrar el archivo anterior físico, pero lo logueamos.
             print(
-                f"Advertencia: No se pudo eliminar el archivo anterior {old_file_path}: {e}"
+                f"Advertencia: No se pudo eliminar el archivo anterior {old_file_path}"
             )
 
         return existing_attachment
