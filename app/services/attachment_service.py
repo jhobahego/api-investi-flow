@@ -59,7 +59,7 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             )
 
         # Obtener información del archivo
-        filename, file_size, content_type = FileUtils.get_file_info(file)
+        filename, file_size, _ = FileUtils.get_file_info(file)
 
         # Validar tipo de archivo
         try:
@@ -284,7 +284,7 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             )
 
         # 3. Obtener información del archivo y validar tipo/tamaño
-        filename, file_size, content_type = FileUtils.get_file_info(file)
+        filename, file_size, _ = FileUtils.get_file_info(file)
 
         # Validar tipo de archivo
         try:
