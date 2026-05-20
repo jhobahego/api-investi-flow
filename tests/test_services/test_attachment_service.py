@@ -423,37 +423,57 @@ class TestAttachmentService:
         assert "Error al eliminar el adjunto" in str(exc_info.value.detail)
         self.mock_db.rollback.assert_called_once()
 
-    def test_replace_attachment_success(self):
-        """Probar reemplazo exitoso de adjunto"""
-        mock_file = self.create_mock_upload_file()
+    @patch("app.services.attachment_service.FileUtils.get_file_info")
+    @patch("app.services.attachment_service.FileUtils.validate_file_type")
+    @patch("app.services.attachment_service.FileUtils.validate_file_size")
+    @patch("app.services.attachment_service.FileUtils.generate_unique_filename")
+    @patch("app.services.attachment_service.FileUtils.build_file_path")
+    @patch("app.services.attachment_service.FileUtils.ensure_upload_directory")
+    @patch("app.services.attachment_service.FileUtils.delete_file")
+    def test_replace_attachment_success(
+        self,
+        mock_delete,
+        mock_ensure_dir,
+        mock_build_path,
+        mock_unique_name,
+        mock_validate_size,
+        mock_validate_type,
+        mock_file_info,
+    ):
+        """Probar reemplazo exitoso de adjunto actualizando el mismo registro"""
+        mock_file = self.create_mock_upload_file(filename="new.pdf")
         mock_project = self.create_mock_project()
         old_attachment = self.create_mock_attachment()
-        new_attachment = self.create_mock_attachment(attachment_id=2)
+        old_attachment.file_path = "/uploads/documents/projects/1/old.pdf"
 
         self.service.project_repository.get = Mock(return_value=mock_project)
         self.service.attachment_repository.get_attachment_by_parent = Mock(
             return_value=old_attachment
         )
 
-        # Mock para create_attachment
-        self.service.create_attachment = Mock(return_value=new_attachment)
-        self.service.attachment_repository.remove = Mock(return_value=True)
+        # Configurar file utils
+        mock_file_info.return_value = ("new.pdf", 2048, "application/pdf")
+        mock_validate_type.return_value = FileType.PDF
+        mock_unique_name.return_value = "unique-new.pdf"
+        mock_build_path.return_value = "/uploads/documents/projects/1/unique-new.pdf"
 
-        with patch(
-            "app.services.attachment_service.FileUtils.delete_file"
-        ) as mock_delete:
-            result = self.service.replace_attachment(
-                self.mock_db, mock_file, "project", 1, 1
-            )
+        # Mock para _save_file
+        self.service._save_file = Mock()
 
-            assert result == new_attachment
-            self.service.create_attachment.assert_called_once_with(
-                self.mock_db, mock_file, "project", 1, 1
-            )
-            self.service.attachment_repository.remove.assert_called_once_with(
-                self.mock_db, id=old_attachment.id
-            )
-            mock_delete.assert_called_once_with(str(old_attachment.file_path))
+        result = self.service.replace_attachment(
+            self.mock_db, mock_file, "project", 1, 1
+        )
+
+        assert result == old_attachment
+        assert result.file_name == "new.pdf"
+        assert result.file_path == "/uploads/documents/projects/1/unique-new.pdf"
+        assert result.file_size == 2048
+
+        self.mock_db.add.assert_called_once_with(old_attachment)
+        self.mock_db.commit.assert_called_once()
+        self.mock_db.refresh.assert_called_once_with(old_attachment)
+        self.service._save_file.assert_called_once()
+        mock_delete.assert_called_once_with("/uploads/documents/projects/1/old.pdf")
 
     def test_replace_attachment_no_existing(self):
         """Probar reemplazo cuando no existe adjunto previo"""
