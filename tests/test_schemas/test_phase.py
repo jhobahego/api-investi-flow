@@ -145,6 +145,19 @@ class TestPhaseSchemas:
         assert phase.color == "#33FF57"
         assert phase.project_id == 123
 
+    def test_phase_create_without_position(self):
+        """Probar PhaseCreate sin especificar posición (debe ser opcional)"""
+        phase_data = {
+            "name": "Nueva Fase Sin Posición",
+            "project_id": 123,
+        }
+
+        phase = PhaseCreate(**phase_data)
+
+        assert phase.name == "Nueva Fase Sin Posición"
+        assert phase.position is None
+        assert phase.project_id == 123
+
     def test_phase_create_missing_project_id(self):
         """Probar PhaseCreate sin project_id requerido"""
         with pytest.raises(ValidationError) as exc_info:
