@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.database import get_db
+from app.models.project import Project
 from app.models.user import User
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.project import (
@@ -97,6 +98,34 @@ async def upload_document(
         raise
 
 
+@router.put("/{project_id}/documentos", response_model=AttachmentResponse)
+async def replace_document(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    """
+    Reemplazar el documento adjunto del proyecto.
+
+    Solo el propietario del proyecto puede reemplazar el documento.
+    """
+    try:
+        document = attachment_service.replace_attachment(
+            db=db,
+            file=file,
+            parent_type="project",
+            parent_id=project_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        return AttachmentResponse.model_validate(document)
+
+    except Exception:
+        raise
+
+
 @router.get("/", response_model=List[ProjectListResponse])
 def list_projects(
     *,
@@ -127,7 +156,7 @@ async def list_user_projects_by_search(
     db: Session = Depends(get_db),
     query: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-) -> List[ProjectListResponse]:
+) -> List[type[ProjectListResponse]]:
     """
     Listar todos los proyectos del usuario autenticado que coincidan con la búsqueda.
 
