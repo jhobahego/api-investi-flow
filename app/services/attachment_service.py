@@ -269,10 +269,10 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
         Raises:
             HTTPException: Si hay errores de validación o permisos
         """
-        # Validar que la entidad padre existe y pertenece al usuario
+        # 1. Validar que la entidad padre existe y pertenece al usuario
         self._validate_parent_entity(db, parent_type, parent_id, user_id)
 
-        # Obtener el adjunto existente
+        # 2. Obtener el adjunto existente
         existing_attachment = self.attachment_repository.get_attachment_by_parent(
             db, parent_id, parent_type
         )
@@ -283,27 +283,73 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
                 detail=f"No existe un documento adjunto para esta {parent_type}",
             )
 
-        # Eliminar el adjunto existente
-        old_file_path = existing_attachment.file_path
-        attachment_id = existing_attachment.id
+        # 3. Obtener información del archivo y validar tipo/tamaño
+        filename, file_size, content_type = FileUtils.get_file_info(file)
 
+        # Validar tipo de archivo
         try:
-            # Crear el nuevo adjunto
-            new_attachment = self.create_attachment(
-                db, file, parent_type, parent_id, user_id
+            file_type = FileUtils.validate_file_type(file)
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Validar tamaño del archivo
+        try:
+            FileUtils.validate_file_size(file_size)
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # 4. Generar nombre único y construir ruta para el nuevo archivo
+        unique_filename = FileUtils.generate_unique_filename(filename)
+        parent_type_plural = self._get_parent_type_plural(parent_type)
+        new_file_path = FileUtils.build_file_path(
+            parent_type_plural, parent_id, unique_filename
+        )
+
+        # Asegurar que el directorio existe
+        FileUtils.ensure_upload_directory()
+
+        # 5. Guardar nuevo archivo en ruta única
+        try:
+            self._save_file(file, new_file_path)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error al guardar el archivo: {str(e)}"
             )
 
-            # Eliminar el registro anterior
-            self.attachment_repository.remove(db, id=attachment_id)  # type: ignore
+        # Guardamos la ruta anterior para eliminarla después del commit
+        old_file_path = str(existing_attachment.file_path)
 
-            # Eliminar el archivo anterior después de crear el nuevo
-            FileUtils.delete_file(str(old_file_path))
+        # 6. Actualizar el mismo registro del adjunto (file_name, file_path, file_type, file_size)
+        existing_attachment.file_name = filename
+        existing_attachment.file_path = new_file_path
+        existing_attachment.file_type = file_type
+        existing_attachment.file_size = file_size
 
-            return new_attachment
+        # 7. Commit; si falla, borrar el nuevo archivo y rollback
+        try:
+            db.add(existing_attachment)
+            db.commit()
+            db.refresh(existing_attachment)
         except Exception as e:
-            # Si falla, mantener el adjunto anterior
+            # Eliminar el nuevo archivo que acabamos de guardar
+            FileUtils.delete_file(new_file_path)
             db.rollback()
-            raise e
+            print(f"Error al actualizar el registro del adjunto: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Error al actualizar el registro del adjunto",
+            )
+
+        # 8. Luego de commit, borrar el archivo anterior
+        try:
+            FileUtils.delete_file(old_file_path)
+        except Exception as e:
+            # No fallamos la petición si no se puede borrar el archivo anterior físico, pero lo logueamos.
+            print(
+                f"Advertencia: No se pudo eliminar el archivo anterior {old_file_path}: {e}"
+            )
+
+        return existing_attachment
 
     def _validate_parent_entity(
         self, db: Session, parent_type: str, parent_id: int, user_id: int

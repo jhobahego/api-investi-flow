@@ -97,6 +97,34 @@ async def upload_document(
         raise
 
 
+@router.put("/{project_id}/documentos", response_model=AttachmentResponse)
+async def replace_document(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> AttachmentResponse:
+    """
+    Reemplazar el documento adjunto del proyecto.
+
+    Solo el propietario del proyecto puede reemplazar el documento.
+    """
+    try:
+        document = attachment_service.replace_attachment(
+            db=db,
+            file=file,
+            parent_type="project",
+            parent_id=project_id,
+            user_id=current_user.id,  # type: ignore
+        )
+
+        return AttachmentResponse.model_validate(document)
+
+    except Exception:
+        raise
+
+
 @router.get("/", response_model=List[ProjectListResponse])
 def list_projects(
     *,
