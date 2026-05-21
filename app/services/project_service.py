@@ -229,7 +229,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     def search_user_projects_by_name(
         self, db: Session, query: str, owner_id: int
-    ) -> list[type[Project]]:
+    ) -> list[Project]:
         """
         Buscar proyectos por nombre que contengan una subcadena específica.
 

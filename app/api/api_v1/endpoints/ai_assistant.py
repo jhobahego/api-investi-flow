@@ -19,6 +19,7 @@ from app.schemas.ai import (
     AIErrorResponse,
     BibliographyRequest,
     BibliographyResponse,
+    BibliographySource,
     CitationRequest,
     CitationResponse,
     SuggestionRequest,
@@ -470,21 +471,21 @@ async def search_bibliography(
         )
 
         # Convertir sources a formato de schema
-        bibliography_sources = []
+        bibliography_sources: list[BibliographySource] = []
         for source in sources:
             try:
                 bibliography_sources.append(
-                    {
-                        "titulo": source.get("titulo", ""),
-                        "autores": source.get("autores", []),
-                        "anio": source.get("anio"),  # Puede ser None
-                        "tipo": source.get("tipo", ""),
-                        "fuente": source.get("fuente", ""),
-                        "doi": source.get("doi"),
-                        "url": source.get("url", ""),
-                        "resumen": source.get("resumen", ""),
-                        "relevancia": source.get("relevancia", 3),
-                    }
+                    BibliographySource(
+                        titulo=source.get("titulo", ""),
+                        autores=source.get("autores", []),
+                        anio=source.get("anio"),
+                        tipo=source.get("tipo", ""),
+                        fuente=source.get("fuente", ""),
+                        doi=source.get("doi"),
+                        url=source.get("url", ""),
+                        resumen=source.get("resumen", ""),
+                        relevancia=source.get("relevancia", 3),
+                    )
                 )
             except Exception as e:
                 logger.warning(f"Error al procesar fuente: {str(e)}")

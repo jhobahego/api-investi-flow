@@ -1,6 +1,8 @@
 """
 Endpoints para extracción y gestión de contenido de documentos
 """
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -81,7 +83,7 @@ async def extract_document_content(
     )
 
     # Convertir attachment a dict y agregar html_content
-    response_data = {
+    response_data: dict[str, Any] = {
         "id": attachment.id,
         "file_name": attachment.file_name,
         "file_type": attachment.file_type,
@@ -211,7 +213,7 @@ async def extract_document_pages(
     pages = document_extraction_service.extract_docx_to_pages(str(attachment.file_path))
 
     # Convertir attachment a dict y agregar páginas
-    response_data = {
+    response_data: dict[str, Any] = {
         "id": attachment.id,
         "file_name": attachment.file_name,
         "file_type": attachment.file_type,

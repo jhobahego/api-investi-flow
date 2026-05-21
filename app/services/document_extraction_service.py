@@ -4,6 +4,7 @@ Compatible con TipTap editor
 """
 import re
 from pathlib import Path
+from types import ModuleType
 from typing import List, Optional
 
 try:
@@ -15,15 +16,17 @@ except ImportError:
         "python-docx no está instalado. " "Ejecuta: pip install python-docx"
     )
 
+pypdf2: ModuleType | None = None
 try:
     import PyPDF2
+
+    pypdf2 = PyPDF2
 except ImportError:
     import logging
 
     logging.warning(
         "PyPDF2 no está instalado. El soporte para PDF estará deshabilitado. Ejecuta: pip install PyPDF2"
     )
-    PyPDF2 = None
 
 from fastapi import HTTPException
 
@@ -461,12 +464,12 @@ class DocumentExtractionService:
     @staticmethod
     def extract_pdf_to_text(file_path: str, max_chars: int = 50000) -> str:
         """Extrae el texto de un archivo PDF hasta un máximo de caracteres."""
-        if not PyPDF2:
+        if not pypdf2:
             return "Error: Soporte para PDF no instalado."
         try:
             text = ""
             with open(file_path, "rb") as file:
-                reader = PyPDF2.PdfReader(file)
+                reader = pypdf2.PdfReader(file)
                 for page in reader.pages:
                     page_text = page.extract_text()
                     if page_text:
