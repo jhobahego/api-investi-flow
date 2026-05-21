@@ -1142,7 +1142,7 @@ async def chat_with_persistent_history(  # noqa: C901
                     conversation_repository.update_title(
                         db,
                         conversation_id=conversation.id,
-                        title=new_title,
+                        new_title=new_title,
                         user_id=current_user.id,  # type: ignore
                     )
             except Exception as e:
