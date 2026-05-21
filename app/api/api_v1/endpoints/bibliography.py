@@ -179,6 +179,10 @@ async def upload_bibliography_document(
         )
 
     # Guardar archivo
+    if file.filename is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Archivo sin nombre"
+        )
     file_ext = os.path.splitext(file.filename)[1]
     file_path = os.path.join(UPLOAD_DIR, f"{project_id}_{bibliography_id}{file_ext}")
 

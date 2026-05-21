@@ -134,7 +134,7 @@ def list_projects(
     *,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[ProjectListResponse]:
+) -> List[Project]:
     """
     Listar todos los proyectos del usuario autenticado.
 
@@ -159,7 +159,7 @@ async def list_user_projects_by_search(
     db: Session = Depends(get_db),
     query: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-) -> List[type[ProjectListResponse]]:
+) -> List[Project]:
     """
     Listar todos los proyectos del usuario autenticado que coincidan con la búsqueda.
 
