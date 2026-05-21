@@ -46,6 +46,9 @@ class PhaseCreate(PhaseBase):
     """Esquema para crear una fase"""
 
     project_id: int = Field(..., description="ID del proyecto al que pertenece la fase")
+    position: Optional[int] = Field(  # type: ignore[assignment]
+        None, ge=0, description="Posición de la fase en el proyecto"
+    )
 
 
 class PhaseUpdate(BaseModel):

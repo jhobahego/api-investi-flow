@@ -96,6 +96,38 @@ class TestPhaseService:
         assert result.position == 0  # type: ignore
         assert result.project_id == test_project.id
 
+    def test_create_phase_without_position(self, db_session, test_user, test_project):
+        """Probar creación exitosa de fase sin posición especificada (debe calcular posición automática)"""
+        # Crear primera fase con posición 0
+        phase1_data = PhaseCreate(
+            name="Primera Fase",
+            position=0,
+            project_id=test_project.id,
+            color=None,
+        )
+        phase_service.create_phase(
+            db=db_session,
+            phase_in=phase1_data,
+            owner_id=test_user.id,
+        )
+
+        # Crear segunda fase sin posición
+        phase2_data = PhaseCreate(
+            name="Segunda Fase",
+            project_id=test_project.id,
+            color=None,
+        )
+        result = phase_service.create_phase(
+            db=db_session,
+            phase_in=phase2_data,
+            owner_id=test_user.id,
+        )
+
+        assert result is not None
+        assert result.name == "Segunda Fase"  # type: ignore
+        assert result.position == 1  # Debe ser max_position (0) + 1 = 1
+        assert result.project_id == test_project.id
+
     def test_create_phase_project_not_found(self, db_session, test_user):
         """Probar creación de fase con proyecto inexistente"""
         phase_data = PhaseCreate(
