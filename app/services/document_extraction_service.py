@@ -229,7 +229,11 @@ class DocumentExtractionService:
             return "<p></p>"
 
         # Detectar nivel de encabezado
-        style = paragraph.style.name.lower() if paragraph.style else ""
+        style = (
+            paragraph.style.name.lower()
+            if paragraph.style and paragraph.style.name
+            else ""
+        )
 
         if "heading 1" in style or "título 1" in style:
             return f"<h1>{DocumentExtractionService._format_runs(paragraph)}</h1>"
