@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime
 from sqlalchemy import Enum as SqlEnum
@@ -8,8 +8,10 @@ from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.attachment import Attachment
-from app.models.phase import Phase
+
+if TYPE_CHECKING:
+    from app.models.attachment import Attachment
+    from app.models.phase import Phase
 
 
 class TaskStatus(str, Enum):
