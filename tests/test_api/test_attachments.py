@@ -115,10 +115,6 @@ class TestAttachmentEndpoints:
             files={"file": file_data},
         )
 
-        if response.status_code != 201:
-            print(f"Error: {response.status_code}")
-            print(f"Response: {response.text}")
-
         assert response.status_code == 201
         data = response.json()
         assert data["file_name"] == "project_document.pdf"
