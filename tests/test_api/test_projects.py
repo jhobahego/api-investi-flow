@@ -386,7 +386,7 @@ class TestProjectEndpoints:
         assert response.status_code == 401
 
     def test_delete_project_success(self):
-        """Probar eliminación exitosa de proyecto"""
+        """Probar archivado (soft-delete) exitoso de proyecto"""
         headers, _ = self.create_test_user_and_login()
 
         # Crear un proyecto
@@ -396,16 +396,30 @@ class TestProjectEndpoints:
             "/api/v1/proyectos/", json=project_data, headers=headers
         )
         assert create_response.status_code == 201
+        assert create_response.json()["deleted_at"] is None
         project_id = create_response.json()["id"]
 
-        # Eliminar el proyecto
+        # Archivar el proyecto (soft-delete)
         response = client.delete(f"/api/v1/proyectos/{project_id}", headers=headers)
 
         assert response.status_code == 204
 
-        # Verificar que el proyecto ya no existe
+        # Verificar que el proyecto ya no es accesible por id (404)
         get_response = client.get(f"/api/v1/proyectos/{project_id}", headers=headers)
         assert get_response.status_code == 404
+
+        # Verificar que queda excluido del listado general
+        list_response = client.get("/api/v1/proyectos/", headers=headers)
+        assert list_response.status_code == 200
+        assert all(p["id"] != project_id for p in list_response.json())
+
+        # Verificar que aparece en /archived con deleted_at seteado
+        archived_response = client.get("/api/v1/proyectos/archived", headers=headers)
+        assert archived_response.status_code == 200
+        archived = archived_response.json()
+        assert len(archived) == 1
+        assert archived[0]["id"] == project_id
+        assert archived[0]["deleted_at"] is not None
 
     def test_delete_project_not_found(self):
         """Probar eliminación de proyecto que no existe"""
@@ -572,3 +586,352 @@ class TestProjectEndpoints:
         data = response.json()
         assert isinstance(data, list)
         assert len(data) == 3
+
+    def test_delete_project_is_idempotent_when_archived(self):
+        """Archivar un proyecto ya archivado sigue retornando 204"""
+        headers, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Proyecto Idempotente"}, headers=headers
+        )
+        assert create_response.status_code == 201
+        project_id = create_response.json()["id"]
+
+        first = client.delete(f"/api/v1/proyectos/{project_id}", headers=headers)
+        assert first.status_code == 204
+
+        second = client.delete(f"/api/v1/proyectos/{project_id}", headers=headers)
+        assert second.status_code == 204
+
+        archived = client.get("/api/v1/proyectos/archived", headers=headers)
+        assert archived.status_code == 200
+        assert len(archived.json()) == 1
+
+    def test_list_projects_excludes_archived(self):
+        """El listado general excluye archivados pero incluye activos"""
+        headers, _ = self.create_test_user_and_login()
+
+        ids = []
+        for name in ["Proyecto Activo", "Proyecto A Archivar"]:
+            resp = client.post(
+                "/api/v1/proyectos/", json={"name": name}, headers=headers
+            )
+            assert resp.status_code == 201
+            ids.append(resp.json()["id"])
+
+        client.delete(f"/api/v1/proyectos/{ids[1]}", headers=headers)
+
+        response = client.get("/api/v1/proyectos/", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == ids[0]
+
+    def test_archived_lists_only_owner_archived(self):
+        """GET /archived lista solo los archivados del owner"""
+        headers, _ = self.create_test_user_and_login()
+
+        for name in ["Archivado 1", "Archivado 2", "Activo"]:
+            resp = client.post(
+                "/api/v1/proyectos/", json={"name": name}, headers=headers
+            )
+            assert resp.status_code == 201
+
+        listed = client.get("/api/v1/proyectos/", headers=headers).json()
+        to_archive = [p["id"] for p in listed if p["name"] != "Activo"]
+        for pid in to_archive:
+            assert (
+                client.delete(f"/api/v1/proyectos/{pid}", headers=headers).status_code
+                == 204
+            )
+
+        response = client.get("/api/v1/proyectos/archived", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert {p["name"] for p in data} == {"Archivado 1", "Archivado 2"}
+        assert all(p["deleted_at"] is not None for p in data)
+
+    def test_archived_empty_when_nothing_archived(self):
+        """GET /archived retorna lista vacía si no hay archivados"""
+        headers, _ = self.create_test_user_and_login()
+
+        resp = client.post(
+            "/api/v1/proyectos/", json={"name": "Solo Activo"}, headers=headers
+        )
+        assert resp.status_code == 201
+
+        response = client.get("/api/v1/proyectos/archived", headers=headers)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_archived_does_not_leak_other_users(self):
+        """Un usuario no ve los archivados de otro usuario"""
+        headers1, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Privado"}, headers=headers1
+        )
+        project_id = create_response.json()["id"]
+        assert (
+            client.delete(
+                f"/api/v1/proyectos/{project_id}", headers=headers1
+            ).status_code
+            == 204
+        )
+
+        user_data_2 = {
+            "email": "user2@example.com",
+            "full_name": "User Two",
+            "password": "Test123456",
+            "phone_number": "+573001234568",
+        }
+        client.post("/api/v1/auth/register", json=user_data_2)
+        login_response_2 = client.post(
+            "/api/v1/auth/login",
+            data={"username": "user2@example.com", "password": "Test123456"},
+        )
+        headers2 = {
+            "Authorization": f"Bearer {login_response_2.json()['access_token']}"
+        }
+
+        response = client.get("/api/v1/proyectos/archived", headers=headers2)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_archived_project_returns_404(self):
+        """GET /{id}, /phases y /documentos de un archivado retornan 404"""
+        headers, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Se Archivará"}, headers=headers
+        )
+        project_id = create_response.json()["id"]
+        assert (
+            client.delete(
+                f"/api/v1/proyectos/{project_id}", headers=headers
+            ).status_code
+            == 204
+        )
+
+        assert (
+            client.get(f"/api/v1/proyectos/{project_id}", headers=headers).status_code
+            == 404
+        )
+        assert (
+            client.get(
+                f"/api/v1/proyectos/{project_id}/phases", headers=headers
+            ).status_code
+            == 404
+        )
+        assert (
+            client.get(
+                f"/api/v1/proyectos/{project_id}/documentos", headers=headers
+            ).status_code
+            == 404
+        )
+
+    def test_search_excludes_archived(self):
+        """La búsqueda excluye proyectos archivados"""
+        headers, _ = self.create_test_user_and_login()
+
+        for name in ["Alpha Buscable", "Alpha Archivado"]:
+            resp = client.post(
+                "/api/v1/proyectos/", json={"name": name}, headers=headers
+            )
+            assert resp.status_code == 201
+            if name == "Alpha Archivado":
+                assert (
+                    client.delete(
+                        f"/api/v1/proyectos/{resp.json()['id']}", headers=headers
+                    ).status_code
+                    == 204
+                )
+
+        response = client.get("/api/v1/proyectos/search?query=Alpha", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "Alpha Buscable"
+
+    def test_restore_project_success(self):
+        """Restaurar un archivado lo vuelve accesible y lo saca de /archived"""
+        headers, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Restaurable"}, headers=headers
+        )
+        project_id = create_response.json()["id"]
+        assert (
+            client.delete(
+                f"/api/v1/proyectos/{project_id}", headers=headers
+            ).status_code
+            == 204
+        )
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/restore", headers=headers
+        )
+        assert response.status_code == 200
+        assert response.json()["id"] == project_id
+        assert response.json()["deleted_at"] is None
+
+        assert (
+            client.get(f"/api/v1/proyectos/{project_id}", headers=headers).status_code
+            == 200
+        )
+        listed = client.get("/api/v1/proyectos/", headers=headers).json()
+        assert any(p["id"] == project_id for p in listed)
+        assert client.get("/api/v1/proyectos/archived", headers=headers).json() == []
+
+    def test_restore_not_archived_returns_400(self):
+        """Restaurar un proyecto activo retorna 400"""
+        headers, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Siempre Activo"}, headers=headers
+        )
+        project_id = create_response.json()["id"]
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/restore", headers=headers
+        )
+        assert response.status_code == 400
+
+    def test_restore_not_found(self):
+        """Restaurar un proyecto inexistente retorna 404"""
+        headers, _ = self.create_test_user_and_login()
+
+        response = client.post("/api/v1/proyectos/999999/restore", headers=headers)
+        assert response.status_code == 404
+
+    def test_restore_of_other_user_returns_404(self):
+        """Restaurar un proyecto de otro usuario retorna 404"""
+        headers1, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Ajeno"}, headers=headers1
+        )
+        project_id = create_response.json()["id"]
+        assert (
+            client.delete(
+                f"/api/v1/proyectos/{project_id}", headers=headers1
+            ).status_code
+            == 204
+        )
+
+        user_data_2 = {
+            "email": "user2@example.com",
+            "full_name": "User Two",
+            "password": "Test123456",
+            "phone_number": "+573001234568",
+        }
+        client.post("/api/v1/auth/register", json=user_data_2)
+        login_response_2 = client.post(
+            "/api/v1/auth/login",
+            data={"username": "user2@example.com", "password": "Test123456"},
+        )
+        headers2 = {
+            "Authorization": f"Bearer {login_response_2.json()['access_token']}"
+        }
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/restore", headers=headers2
+        )
+        assert response.status_code == 404
+
+        # El dueño todavía lo ve archivado
+        archived = client.get("/api/v1/proyectos/archived", headers=headers1).json()
+        assert any(p["id"] == project_id for p in archived)
+
+    def test_permanent_delete_success(self):
+        """El borrado permanente elimina un archivado de /archived"""
+        headers, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Borrado Total"}, headers=headers
+        )
+        project_id = create_response.json()["id"]
+        assert (
+            client.delete(
+                f"/api/v1/proyectos/{project_id}", headers=headers
+            ).status_code
+            == 204
+        )
+
+        response = client.delete(
+            f"/api/v1/proyectos/{project_id}/permanent", headers=headers
+        )
+        assert response.status_code == 204
+
+        assert client.get("/api/v1/proyectos/archived", headers=headers).json() == []
+        assert (
+            client.post(
+                f"/api/v1/proyectos/{project_id}/restore", headers=headers
+            ).status_code
+            == 404
+        )
+
+    def test_permanent_delete_not_archived_returns_400(self):
+        """El borrado permanente de un activo retorna 400 y lo conserva"""
+        headers, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "No Archivado"}, headers=headers
+        )
+        project_id = create_response.json()["id"]
+
+        response = client.delete(
+            f"/api/v1/proyectos/{project_id}/permanent", headers=headers
+        )
+        assert response.status_code == 400
+
+        assert (
+            client.get(f"/api/v1/proyectos/{project_id}", headers=headers).status_code
+            == 200
+        )
+
+    def test_permanent_delete_not_found(self):
+        """El borrado permanente de un inexistente retorna 404"""
+        headers, _ = self.create_test_user_and_login()
+
+        response = client.delete("/api/v1/proyectos/999999/permanent", headers=headers)
+        assert response.status_code == 404
+
+    def test_permanent_delete_of_other_user_returns_404(self):
+        """El borrado permanente de un proyecto ajeno retorna 404 y lo conserva"""
+        headers1, _ = self.create_test_user_and_login()
+
+        create_response = client.post(
+            "/api/v1/proyectos/", json={"name": "Ajeno Permanente"}, headers=headers1
+        )
+        project_id = create_response.json()["id"]
+        assert (
+            client.delete(
+                f"/api/v1/proyectos/{project_id}", headers=headers1
+            ).status_code
+            == 204
+        )
+
+        user_data_2 = {
+            "email": "user2@example.com",
+            "full_name": "User Two",
+            "password": "Test123456",
+            "phone_number": "+573001234568",
+        }
+        client.post("/api/v1/auth/register", json=user_data_2)
+        login_response_2 = client.post(
+            "/api/v1/auth/login",
+            data={"username": "user2@example.com", "password": "Test123456"},
+        )
+        headers2 = {
+            "Authorization": f"Bearer {login_response_2.json()['access_token']}"
+        }
+
+        response = client.delete(
+            f"/api/v1/proyectos/{project_id}/permanent", headers=headers2
+        )
+        assert response.status_code == 404
+
+        archived = client.get("/api/v1/proyectos/archived", headers=headers1).json()
+        assert any(p["id"] == project_id for p in archived)

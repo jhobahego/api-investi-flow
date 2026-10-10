@@ -240,7 +240,7 @@ class TestProjectService:
         assert "Proyecto no encontrado" in exc_info.value.detail
 
     def test_delete_user_project_success(self, db_session, test_user, test_project):
-        """Probar eliminación exitosa de proyecto"""
+        """Probar archivado (soft-delete) exitoso de proyecto"""
         project_id = test_project.id
 
         result = project_service.delete_user_project(
@@ -249,11 +249,223 @@ class TestProjectService:
 
         assert result is True
 
-        # Verificar que el proyecto fue eliminado
-        deleted_project = (
+        # Verificar que la fila sigue en DB con deleted_at seteado
+        archived_project = (
             db_session.query(Project).filter(Project.id == project_id).first()
         )
-        assert deleted_project is None
+        assert archived_project is not None
+        assert archived_project.deleted_at is not None
+
+        # Verificar que ya no es visible como proyecto activo
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.get_user_project_by_id(
+                db=db_session, project_id=project_id, owner_id=test_user.id
+            )
+        assert exc_info.value.status_code == 404
+
+    def test_delete_user_project_is_idempotent(
+        self, db_session, test_user, test_project
+    ):
+        """Archivar dos veces retorna True sin error"""
+        project_id = test_project.id
+
+        assert (
+            project_service.delete_user_project(
+                db=db_session, project_id=project_id, owner_id=test_user.id
+            )
+            is True
+        )
+        assert (
+            project_service.delete_user_project(
+                db=db_session, project_id=project_id, owner_id=test_user.id
+            )
+            is True
+        )
+
+        still_there = db_session.query(Project).filter(Project.id == project_id).first()
+        assert still_there is not None
+        assert still_there.deleted_at is not None
+
+    def test_get_user_projects_excludes_archived(self, db_session, test_user):
+        """El listado del usuario excluye archivados"""
+        active = Project(name="Activo", owner_id=test_user.id, status="planning")
+        to_archive = Project(name="Archivado", owner_id=test_user.id, status="planning")
+        db_session.add_all([active, to_archive])
+        db_session.commit()
+        db_session.refresh(to_archive)
+
+        project_service.delete_user_project(
+            db=db_session, project_id=to_archive.id, owner_id=test_user.id
+        )
+
+        result = project_service.get_user_projects(db=db_session, owner_id=test_user.id)
+        assert len(result) == 1
+        assert result[0].name == "Activo"
+
+    def test_get_archived_user_projects(self, db_session, test_user):
+        """Solo retorna los archivados del usuario"""
+        active = Project(name="Activo", owner_id=test_user.id, status="planning")
+        archived = Project(name="Archivado", owner_id=test_user.id, status="planning")
+        db_session.add_all([active, archived])
+        db_session.commit()
+        db_session.refresh(archived)
+
+        assert (
+            project_service.get_archived_user_projects(
+                db=db_session, owner_id=test_user.id
+            )
+            == []
+        )
+
+        project_service.delete_user_project(
+            db=db_session, project_id=archived.id, owner_id=test_user.id
+        )
+
+        result = project_service.get_archived_user_projects(
+            db=db_session, owner_id=test_user.id
+        )
+        assert len(result) == 1
+        assert result[0].id == archived.id
+        assert result[0].deleted_at is not None
+
+    def test_search_excludes_archived(self, db_session, test_user):
+        """La búsqueda excluye archivados"""
+        visible = Project(
+            name="Visible Alpha", owner_id=test_user.id, status="planning"
+        )
+        hidden = Project(name="Oculto Alpha", owner_id=test_user.id, status="planning")
+        db_session.add_all([visible, hidden])
+        db_session.commit()
+        db_session.refresh(hidden)
+
+        project_service.delete_user_project(
+            db=db_session, project_id=hidden.id, owner_id=test_user.id
+        )
+
+        result = project_service.search_user_projects_by_name(
+            db=db_session, query="Alpha", owner_id=test_user.id
+        )
+        assert len(result) == 1
+        assert result[0].id == visible.id
+
+    def test_restore_user_project_success(self, db_session, test_user, test_project):
+        """Restaurar un archivado limpia deleted_at"""
+        project_id = test_project.id
+        project_service.delete_user_project(
+            db=db_session, project_id=project_id, owner_id=test_user.id
+        )
+
+        restored = project_service.restore_user_project(
+            db=db_session, project_id=project_id, owner_id=test_user.id
+        )
+
+        assert restored.id == project_id
+        assert restored.deleted_at is None
+
+        found = project_service.get_user_project_by_id(
+            db=db_session, project_id=project_id, owner_id=test_user.id
+        )
+        assert found.id == project_id
+
+    def test_restore_user_project_not_archived(
+        self, db_session, test_user, test_project
+    ):
+        """Restaurar un activo lanza 400"""
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.restore_user_project(
+                db=db_session, project_id=test_project.id, owner_id=test_user.id
+            )
+
+        assert exc_info.value.status_code == 400
+
+    def test_restore_user_project_not_found(self, db_session, test_user):
+        """Restaurar un inexistente lanza 404"""
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.restore_user_project(
+                db=db_session, project_id=99999, owner_id=test_user.id
+            )
+
+        assert exc_info.value.status_code == 404
+
+    def test_permanent_delete_archived_success(
+        self, db_session, test_user, test_project
+    ):
+        """El borrado permanente elimina la fila de un archivado"""
+        project_id = test_project.id
+        project_service.delete_user_project(
+            db=db_session, project_id=project_id, owner_id=test_user.id
+        )
+
+        result = project_service.delete_user_project_permanent(
+            db=db_session, project_id=project_id, owner_id=test_user.id
+        )
+
+        assert result is True
+        assert (
+            db_session.query(Project).filter(Project.id == project_id).first() is None
+        )
+
+    def test_permanent_delete_not_archived_raises_400(
+        self, db_session, test_user, test_project
+    ):
+        """El borrado permanente de un activo lanza 400 y lo conserva"""
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.delete_user_project_permanent(
+                db=db_session, project_id=test_project.id, owner_id=test_user.id
+            )
+
+        assert exc_info.value.status_code == 400
+        assert (
+            db_session.query(Project).filter(Project.id == test_project.id).first()
+            is not None
+        )
+
+    def test_permanent_delete_not_found(self, db_session, test_user):
+        """El borrado permanente de un inexistente lanza 404"""
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.delete_user_project_permanent(
+                db=db_session, project_id=99999, owner_id=test_user.id
+            )
+
+        assert exc_info.value.status_code == 404
+
+    def test_archived_project_invisible_to_other_owner(
+        self, db_session, test_user, test_project
+    ):
+        """Un archivado no es visible ni restaurable por otro usuario"""
+        other_user = User(
+            email="other@example.com",
+            full_name="Other User",
+            hashed_password="hashed_password",
+            phone_number="+573009876543",
+            is_active=True,
+        )
+        db_session.add(other_user)
+        db_session.commit()
+        db_session.refresh(other_user)
+
+        project_service.delete_user_project(
+            db=db_session, project_id=test_project.id, owner_id=test_user.id
+        )
+
+        assert (
+            project_service.get_archived_user_projects(
+                db=db_session, owner_id=other_user.id
+            )
+            == []
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.restore_user_project(
+                db=db_session, project_id=test_project.id, owner_id=other_user.id
+            )
+        assert exc_info.value.status_code == 404
+
+        with pytest.raises(HTTPException) as exc_info:
+            project_service.delete_user_project_permanent(
+                db=db_session, project_id=test_project.id, owner_id=other_user.id
+            )
+        assert exc_info.value.status_code == 404
 
     def test_delete_user_project_not_found(self, db_session, test_user):
         """Probar eliminación de proyecto que no existe"""
