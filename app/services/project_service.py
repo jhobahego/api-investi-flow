@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import HTTPException, status
@@ -80,6 +81,41 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
                 detail=f"Error al obtener los proyectos: {str(e)}",
             )
 
+    def get_archived_user_projects(self, db: Session, owner_id: int) -> List[Project]:
+        """
+        Obtener solo los proyectos archivados de un usuario.
+
+        Args:
+            db: Sesión de base de datos
+            owner_id: ID del usuario propietario
+
+        Returns:
+            Lista de proyectos archivados del usuario
+        """
+        try:
+            projects = project_repository.get_archived_projects_by_owner(
+                db=db, owner_id=owner_id
+            )
+            return projects
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al obtener los proyectos archivados: {str(e)}",
+            )
+
+    def find_archived_user_project(
+        self, db: Session, project_id: int, owner_id: int
+    ) -> Optional[Project]:
+        """
+        Buscar un proyecto archivado del usuario sin lanzar excepciones.
+
+        Retorna None si no existe, no pertenece al usuario o no está archivado.
+        """
+        return project_repository.get_archived_project_by_owner_and_id(
+            db=db, project_id=project_id, owner_id=owner_id
+        )
+
     def get_user_project_by_id(
         self, db: Session, project_id: int, owner_id: int
     ) -> Project:
@@ -147,7 +183,104 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
 
     def delete_user_project(self, db: Session, project_id: int, owner_id: int) -> bool:
         """
-        Eliminar un proyecto de un usuario.
+        Archivar (soft-delete) un proyecto de un usuario.
+
+        Setea `deleted_at` con la hora UTC actual. Si ya estaba archivado,
+        es idempotente y retorna True. Solo el propietario; 404 si no existe,
+        no es owner o... (verifica con lookup que incluye archivados para
+        distinguir idempotencia de no-encontrado).
+
+        Args:
+            db: Sesión de base de datos
+            project_id: ID del proyecto
+            owner_id: ID del usuario propietario
+
+        Returns:
+            True si quedó archivado (o ya lo estaba)
+
+        Raises:
+            HTTPException: Si el proyecto no existe o no pertenece al usuario
+        """
+        # Lookup sin filtro de archivado para soportar idempotencia
+        project = project_repository.get_any_project_by_owner_and_id(
+            db=db, project_id=project_id, owner_id=owner_id
+        )
+
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o no tienes permisos para acceder a él",
+            )
+
+        if project.deleted_at is not None:
+            return True
+
+        try:
+            # Archivar el proyecto
+            project.deleted_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(project)
+            return True
+
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al archivar el proyecto: {str(e)}",
+            )
+
+    def restore_user_project(
+        self, db: Session, project_id: int, owner_id: int
+    ) -> Project:
+        """
+        Restaurar un proyecto archivado (deleted_at=None).
+
+        Args:
+            db: Sesión de base de datos
+            project_id: ID del proyecto
+            owner_id: ID del usuario propietario
+
+        Returns:
+            Proyecto restaurado
+
+        Raises:
+            HTTPException: 404 si no existe o no pertenece al usuario;
+                400 si no estaba archivado
+        """
+        project = project_repository.get_any_project_by_owner_and_id(
+            db=db, project_id=project_id, owner_id=owner_id
+        )
+
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o no tienes permisos para acceder a él",
+            )
+
+        if project.deleted_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El proyecto no está archivado",
+            )
+
+        try:
+            project.deleted_at = None
+            db.commit()
+            db.refresh(project)
+            return project
+
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al restaurar el proyecto: {str(e)}",
+            )
+
+    def delete_user_project_permanent(
+        self, db: Session, project_id: int, owner_id: int
+    ) -> bool:
+        """
+        Eliminar definitivamente un proyecto archivado (único hard-delete).
 
         Args:
             db: Sesión de base de datos
@@ -158,12 +291,24 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
             True si se eliminó correctamente
 
         Raises:
-            HTTPException: Si el proyecto no existe o no pertenece al usuario
+            HTTPException: 404 si no existe o no pertenece al usuario;
+                400 si el proyecto no está archivado
         """
-        # Verificar que el proyecto existe y pertenece al usuario
-        project = self.get_user_project_by_id(
+        project = project_repository.get_any_project_by_owner_and_id(
             db=db, project_id=project_id, owner_id=owner_id
         )
+
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Proyecto no encontrado o no tienes permisos para acceder a él",
+            )
+
+        if project.deleted_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El proyecto debe estar archivado antes de eliminarlo definitivamente",
+            )
 
         try:
             # Eliminar el proyecto
@@ -197,14 +342,8 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate]):
         """
 
         try:
-            project = project_repository.get(db=db, id=project_id)
-            if not project:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Proyecto no encontrado",
-                )
-
-            # Verificar que el proyecto pertenece al usuario
+            # Verificar que el proyecto activo pertenece al usuario
+            # (el lookup excluye archivados: un archivado da 404)
             project = project_repository.get_project_by_owner_and_id(
                 db=db, project_id=project_id, owner_id=owner_id
             )

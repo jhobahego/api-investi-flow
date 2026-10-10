@@ -174,6 +174,107 @@ async def list_user_projects_by_search(
     )
 
 
+def _raise_if_project_archived(
+    *,
+    db: Session,
+    project_id: int,
+    owner_id: int,
+) -> None:
+    """Lanzar 404 si el proyecto del owner está archivado.
+
+    Solo intercepta el caso archivado+propio para no alterar el
+    comportamiento existente (403/404) del resto de casos.
+    """
+    archived = project_service.find_archived_user_project(
+        db=db, project_id=project_id, owner_id=owner_id
+    )
+    if archived is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Proyecto no encontrado o no tienes permisos para acceder a él",
+        )
+
+
+@router.get("/archived", response_model=List[ProjectListResponse])
+def list_archived_projects(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[Project]:
+    """
+    Listar solo los proyectos archivados del usuario autenticado.
+    """
+    try:
+        projects = project_service.get_archived_user_projects(
+            db=db, owner_id=current_user.id  # type: ignore
+        )
+        return projects
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}",
+        )
+
+
+@router.post("/{project_id}/restore", response_model=ProjectResponse)
+def restore_project(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+) -> ProjectResponse:
+    """
+    Restaurar un proyecto archivado.
+
+    Solo el propietario puede restaurarlo. Retorna 404 si no existe
+    o no pertenece al usuario, 400 si no estaba archivado.
+    """
+    try:
+        project = project_service.restore_user_project(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
+        )
+        return project
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}",
+        )
+
+
+@router.delete("/{project_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def permanently_delete_project(
+    *,
+    db: Session = Depends(get_db),
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """
+    Eliminar definitivamente un proyecto archivado (único hard-delete).
+
+    Solo el propietario. Retorna 404 si no existe o no pertenece al
+    usuario, 400 si el proyecto no está archivado.
+    """
+    try:
+        project_service.delete_user_project_permanent(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno del servidor: {str(e)}",
+        )
+
+
 @router.get("/{project_id}/documentos")
 async def get_project_document(
     *,
@@ -186,8 +287,14 @@ async def get_project_document(
 
     Solo el propietario del proyecto puede acceder al documento.
     Retorna None si no hay documento adjunto.
+    Retorna 404 si el proyecto está archivado.
     """
     try:
+        _raise_if_project_archived(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
+        )
         attachment = attachment_service.get_attachment_by_parent(
             db=db,
             parent_type="project",
@@ -340,11 +447,12 @@ def delete_project(
     current_user: User = Depends(get_current_user),
 ) -> None:
     """
-    Eliminar un proyecto.
+    Archivar un proyecto (soft-delete).
 
-    Solo el propietario del proyecto puede eliminarlo.
-    Esta acción es irreversible y eliminará también todos los documentos,
-    tareas y bibliografías asociadas al proyecto.
+    Solo el propietario del proyecto puede archivarlo. La fila se conserva
+    con `deleted_at` seteado; el proyecto queda excluido de listados y
+    búsquedas pero visible en `GET /archived`. Idempotente: archivar un
+    proyecto ya archivado retorna 204.
     """
     try:
         project_service.delete_user_project(
@@ -379,11 +487,16 @@ async def download_project_document(
         FileResponse: Archivo para descargar
 
     Raises:
-        HTTPException 404: Si el proyecto no existe o no tiene documento adjunto
+        HTTPException 404: Si el proyecto no existe, está archivado o no tiene documento adjunto
         HTTPException 403: Si el usuario no tiene permisos
         HTTPException 500: Si hay un error al acceder al archivo
     """
     try:
+        _raise_if_project_archived(
+            db=db,
+            project_id=project_id,
+            owner_id=current_user.id,  # type: ignore
+        )
         # Obtener el documento adjunto del proyecto
         attachment = attachment_service.get_attachment_by_parent(
             db=db,

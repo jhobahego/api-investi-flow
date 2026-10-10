@@ -78,6 +78,7 @@ setup: ## Configuración inicial del proyecto
 	$(PIP) install pre-commit
 	.venv/bin/pre-commit install
 	mkdir -p uploads/documents uploads/temp
+	[ -f alembic.ini ] || cp alembic.ini.example alembic.ini
 
 pre-commit: ## Instalar pre-commit hooks
 	$(PIP) install pre-commit
