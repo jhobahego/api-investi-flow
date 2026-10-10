@@ -1,6 +1,7 @@
 import contextvars
 import json
 import logging
+import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -138,8 +139,10 @@ def setup_logging() -> None:
     # Set base level
     root_logger.setLevel(numeric_level)
 
-    # Stream handler for standard output (containers & terminal)
-    stream_handler = logging.StreamHandler()
+    # Stream handler for standard output (containers & terminal).
+    # Explicit sys.stdout: containers collect stdout, while StreamHandler
+    # defaults to stderr.
+    stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(numeric_level)
 
     # Context filter to inject contextvars

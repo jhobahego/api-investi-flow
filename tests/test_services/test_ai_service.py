@@ -277,6 +277,12 @@ class TestAIService:
             '[{"titulo": "Artículo 1", "autores": ["Smith"], "anio": 2020}]'
         )
 
+        # Para Google GenAI SDK ^1.0, el código del servicio revisa candidates[0].content.parts
+        mock_part = MagicMock()
+        mock_part.text = (
+            '[{"titulo": "Artículo 1", "autores": ["Smith"], "anio": 2020}]'
+        )
+
         # Mock de grounding metadata con soporte web
         mock_support = MagicMock()
         mock_support.uri = "https://example.com/article1"
@@ -286,8 +292,11 @@ class TestAIService:
         mock_grounding_support.web_search_queries = ["machine learning"]
         mock_grounding_support.grounding_supports = [mock_support]
 
-        mock_response.candidates = [MagicMock()]
-        mock_response.candidates[0].grounding_metadata = mock_grounding_support
+        mock_candidate = MagicMock()
+        mock_candidate.content.parts = [mock_part]
+        mock_candidate.grounding_metadata = mock_grounding_support
+
+        mock_response.candidates = [mock_candidate]
         mock_genai_client.models.generate_content.return_value = mock_response
 
         query = "machine learning in education"
