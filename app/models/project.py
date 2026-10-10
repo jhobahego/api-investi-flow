@@ -66,6 +66,9 @@ class Project(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None, index=True
+    )
 
     # Relaciones
     owner: Mapped["User"] = relationship("User", back_populates="projects")

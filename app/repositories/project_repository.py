@@ -14,16 +14,64 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         super().__init__(Project)
 
     def get_projects_by_owner(self, db: Session, owner_id: int) -> List[Project]:
-        """Obtener todos los proyectos de un usuario específico"""
-        return db.query(self.model).filter(Project.owner_id == owner_id).all()
+        """Obtener todos los proyectos activos (no archivados) de un usuario"""
+        return (
+            db.query(self.model)
+            .filter(
+                Project.owner_id == owner_id,
+                Project.deleted_at.is_(None),
+            )
+            .all()
+        )
+
+    def get_archived_projects_by_owner(
+        self, db: Session, owner_id: int
+    ) -> List[Project]:
+        """Obtener solo los proyectos archivados de un usuario"""
+        return (
+            db.query(self.model)
+            .filter(
+                Project.owner_id == owner_id,
+                Project.deleted_at.is_not(None),
+            )
+            .all()
+        )
 
     def get_project_by_owner_and_id(
         self, db: Session, project_id: int, owner_id: int
     ) -> Optional[Project]:
-        """Obtener un proyecto específico de un usuario"""
+        """Obtener un proyecto activo (no archivado) de un usuario"""
+        return (
+            db.query(self.model)
+            .filter(
+                Project.id == project_id,
+                Project.owner_id == owner_id,
+                Project.deleted_at.is_(None),
+            )
+            .first()
+        )
+
+    def get_any_project_by_owner_and_id(
+        self, db: Session, project_id: int, owner_id: int
+    ) -> Optional[Project]:
+        """Obtener un proyecto del usuario incluyendo archivados"""
         return (
             db.query(self.model)
             .filter(Project.id == project_id, Project.owner_id == owner_id)
+            .first()
+        )
+
+    def get_archived_project_by_owner_and_id(
+        self, db: Session, project_id: int, owner_id: int
+    ) -> Optional[Project]:
+        """Obtener un proyecto archivado del usuario (None si no está archivado)"""
+        return (
+            db.query(self.model)
+            .filter(
+                Project.id == project_id,
+                Project.owner_id == owner_id,
+                Project.deleted_at.is_not(None),
+            )
             .first()
         )
 
@@ -56,10 +104,10 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
     def get_project_with_phases(
         self, db: Session, project_id: int
     ) -> Optional[Project]:
-        """Obtener todas las fases asociadas a un proyecto"""
+        """Obtener todas las fases asociadas a un proyecto activo (no archivado)"""
         return (
             db.query(Project)
-            .filter(Project.id == project_id)
+            .filter(Project.id == project_id, Project.deleted_at.is_(None))
             .options(joinedload(Project.phases))
             .first()
         )
@@ -67,12 +115,13 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
     def search_projects_by_name(
         self, db: Session, query: str, owner_id: int
     ) -> list[Project]:
-        """Buscar proyectos por nombre que contengan una subcadena específica"""
+        """Buscar proyectos activos por nombre que contengan una subcadena específica"""
         return (
             db.query(self.model)
             .filter(
                 Project.name.ilike(f"%{query}%"),
                 Project.owner_id == owner_id,
+                Project.deleted_at.is_(None),
             )
             .all()
         )

@@ -82,6 +82,7 @@ class ProjectResponse(ProjectBase):
     owner_id: int
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -97,6 +98,7 @@ class ProjectListResponse(BaseModel):
     category: Optional[str]
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
 
 
 # Esquemas con relaciones anidadas (para respuestas detalladas)
