@@ -12,7 +12,16 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # Importar después de agregar al path  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.database import Base  # noqa: E402
-from app.models.user import User  # noqa: F401
+from app.models import (  # noqa: F401
+    Attachment,
+    Bibliography,
+    Conversation,
+    Message,
+    Phase,
+    Project,
+    Task,
+    User,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
