@@ -193,3 +193,32 @@ class TestProjectModel:
         assert project.institution is None
         assert project.research_group is None
         assert project.category is None
+
+    def test_project_deleted_at_defaults_to_none(self, db_session, test_user):
+        """Probar que deleted_at es None por defecto (no archivado)"""
+        project = Project(name="Not Archived Project", owner_id=test_user.id)
+
+        db_session.add(project)
+        db_session.commit()
+        db_session.refresh(project)
+
+        assert project.deleted_at is None
+
+    def test_project_soft_delete_sets_deleted_at(self, db_session, test_user):
+        """Probar que archivar setea deleted_at sin borrar la fila"""
+        from datetime import datetime, timezone
+
+        project = Project(name="Archived Project", owner_id=test_user.id)
+        db_session.add(project)
+        db_session.commit()
+        db_session.refresh(project)
+
+        project.deleted_at = datetime.now(timezone.utc)
+        db_session.commit()
+        db_session.refresh(project)
+
+        assert project.deleted_at is not None
+        assert (
+            db_session.query(Project).filter(Project.id == project.id).first()
+            is not None
+        )
