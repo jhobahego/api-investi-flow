@@ -90,7 +90,7 @@ Forecast backend: ~200–280 líneas autoradas. Estrategia `ask-on-risk`. Commit
 ## Commits
 - `f59cc7c` test(projects): cover soft-delete, archived listing, restore and permanent delete (RED)
 - `e5675b2` feat(projects): soft-delete with deleted_at, archived listing, restore and permanent delete (GREEN)
-- (este doc) docs(archiving): check off B1-B3 with commit hashes — pendiente hash al commitear
+- (este doc) `f1428bb` docs(archiving): check off B1-B3 with commit hashes and verification evidence
 
 ## Next step
 - B1: writer backend modelo + migración.
