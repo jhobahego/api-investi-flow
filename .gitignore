@@ -79,3 +79,4 @@ celerybeat.pid
 agents/
 agents/*.md
 .github/instructions/*
+.atl/
