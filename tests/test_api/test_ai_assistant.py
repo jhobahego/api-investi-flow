@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi import status
+from fastapi import HTTPException, status
 
 from app.database import Base
 from app.services.ai_service import AIServiceError, ModelNotAvailableError
@@ -16,6 +16,14 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def disable_gemini_guard(monkeypatch):
+    """The cost guard is tested in test_gemini_guard.py; here it must
+    not interfere nor require a real Redis (in-memory counters are
+    process-global and would accumulate across tests)."""
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
 
 
 def create_test_user_and_login():
@@ -596,3 +604,94 @@ class TestConversations:
             headers=headers,
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+class TestCostGuard:
+    """Cost guard tests on endpoints (with mocks, no real Redis)"""
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    @patch("app.services.ai_service.ai_service.suggest_text")
+    def test_suggestions_enforce_called(self, mock_suggest_text, mock_enforce):
+        """Suggestions endpoint calls the guard before the service"""
+        headers, _ = create_test_user_and_login()
+        mock_suggest_text.return_value = ("Sugerencia.", "gemini-2.5-flash-lite")
+
+        response = client.post(
+            "/api/v1/ia/sugerencias",
+            json={
+                "editor_state": {
+                    "text": "El machine learning es",
+                    "full_document_content": "Documento",
+                }
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_enforce.assert_called_once()
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    def test_suggestions_429_propagates_retry_after(self, mock_enforce):
+        """A guard 429 propagates with Retry-After header"""
+        mock_enforce.side_effect = HTTPException(
+            status_code=429,
+            detail="Too many requests",
+            headers={"Retry-After": "60"},
+        )
+        headers, _ = create_test_user_and_login()
+
+        response = client.post(
+            "/api/v1/ia/sugerencias",
+            json={
+                "editor_state": {
+                    "text": "Test",
+                    "full_document_content": "Test document",
+                }
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.headers.get("retry-after") == "60"
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    def test_suggestions_413_propagates(self, mock_enforce):
+        """A guard 413 propagates without calling the service"""
+        mock_enforce.side_effect = HTTPException(
+            status_code=413,
+            detail="Prompt exceeds 12000 characters",
+        )
+        headers, _ = create_test_user_and_login()
+
+        response = client.post(
+            "/api/v1/ia/sugerencias",
+            json={
+                "editor_state": {
+                    "text": "Test",
+                    "full_document_content": "Test document",
+                }
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    def test_chat_429_propagates_retry_after(self, mock_enforce):
+        """A guard 429 on chat propagates with Retry-After header"""
+        mock_enforce.side_effect = HTTPException(
+            status_code=429,
+            detail="Too many requests",
+            headers={"Retry-After": "30"},
+        )
+        headers, _ = create_test_user_and_login()
+        project_id = create_test_project(headers)
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/chat",
+            json={"message": "Hola"},
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.headers.get("retry-after") == "30"

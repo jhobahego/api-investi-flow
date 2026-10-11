@@ -132,6 +132,22 @@ FEATURE_GENERATION_CONFIG: dict[AIFeature, dict[str, float | int]] = {
 
 
 # =============================================================================
+# TOKEN BUDGETS PER PLAN (Gemini cost guard, Phase 1)
+# =============================================================================
+# PROFESIONAL is unlimited in count but ALWAYS bounded by these budgets
+# and by the global ceiling: a compromised PRO account cannot be infinite.
+
+USER_TOKENS_PER_DAY: dict[UserPlan, int] = {
+    UserPlan.ESTUDIANTE: 100_000,
+    UserPlan.INVESTIGADOR: 400_000,
+    UserPlan.PROFESIONAL: 1_000_000,
+}
+
+# Bibliography sub-cap inside the user budget (grounding is expensive).
+BIBLIOGRAPHY_TOKENS_PER_DAY_PER_USER: int = 300_000
+
+
+# =============================================================================
 # FUNCIONES AUXILIARES
 # =============================================================================
 
