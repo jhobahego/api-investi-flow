@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Any
@@ -20,8 +21,18 @@ from app.core.ai_prompts import (
     TITLE_GENERATION_PROMPT,
 )
 from app.core.config import settings
+from app.core.gemini_guard import (
+    BIBLIOGRAPHY_CONTEXT_MAX_CHARS,
+    CHAT_CONTEXT_MAX_CHARS,
+    SUGGESTION_DOC_MAX_CHARS,
+    truncate_context,
+)
 
 logger = logging.getLogger(__name__)
+
+# Maximo 5 llamadas simultaneas a Gemini (Fase 1, cost guard).
+_GEMINI_SEMAPHORE = asyncio.Semaphore(5)
+_GEMINI_TIMEOUT_SECONDS = 30
 
 
 class AIServiceError(Exception):
@@ -73,6 +84,40 @@ class AIService:
         ]
 
         logger.info("AIService inicializado correctamente con google-genai")
+
+    async def _call_model(
+        self,
+        model_name: str,
+        contents: Any,
+        config: types.GenerateContentConfig,
+    ) -> Any:
+        """Llama a Gemini sin bloquear el event loop (semaforo + timeout).
+
+        El cliente `google-genai` sync se ejecuta en un thread via
+        `asyncio.to_thread`; el semaforo global limita a 5 llamadas
+        simultaneas y `wait_for` corta a los 30s.
+        """
+        async with _GEMINI_SEMAPHORE:
+            return await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.client.models.generate_content,
+                    model=model_name,
+                    contents=contents,
+                    config=config,
+                ),
+                timeout=_GEMINI_TIMEOUT_SECONDS,
+            )
+
+    def _log_usage(self, response: Any, feature: str) -> None:
+        """Loggea `gemini_usage` desde `usage_metadata` (auditoria de costos)."""
+        usage = getattr(response, "usage_metadata", None)
+        logger.info(
+            "gemini_usage prompt=%s output=%s total=%s feature=%s",
+            getattr(usage, "prompt_token_count", None),
+            getattr(usage, "candidates_token_count", None),
+            getattr(usage, "total_token_count", None),
+            feature,
+        )
 
     def _get_config(
         self,
@@ -163,6 +208,10 @@ class AIService:
         try:
             model_name, config = self._get_config(AIFeature.CHAT, plan)
 
+            # Truncado server-side (cost guard): el contexto nunca supera
+            # CHAT_CONTEXT_MAX_CHARS antes de llamar a Gemini.
+            project_context = truncate_context(project_context, CHAT_CONTEXT_MAX_CHARS)
+
             # Formatear el prompt del sistema con el contexto del proyecto
             system_prompt = CHAT_SYSTEM_PROMPT.format(
                 project_context=project_context
@@ -180,8 +229,8 @@ class AIService:
             contents.append(message)
 
             # Generar respuesta usando system_instruction
-            response = self.client.models.generate_content(
-                model=model_name,
+            response = await self._call_model(
+                model_name=model_name,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     temperature=config.temperature,
@@ -193,6 +242,7 @@ class AIService:
                 ),
             )
 
+            self._log_usage(response, AIFeature.CHAT.value)
             logger.info(f"Chat completado exitosamente con {model_name}")
 
             if not response.text:
@@ -241,6 +291,11 @@ class AIService:
 
             model_name, config = self._get_config(AIFeature.SUGGESTIONS, plan)
 
+            # Truncado server-side (cost guard) del documento completo.
+            document_content = (
+                truncate_context(document_content, SUGGESTION_DOC_MAX_CHARS) or ""
+            )
+
             # Formatear contextos
             project_ctx = project_context or "Proyecto sin información específica"
             hierarchical_ctx = format_hierarchical_context(current_context)
@@ -258,11 +313,12 @@ class AIService:
             # Agregar el texto actual al final
             prompt += f"\n\nTEXTO DONDE CONTINUAR:\n{text}\n\nTU SUGERENCIA:"
 
-            response = self.client.models.generate_content(
-                model=model_name,
+            response = await self._call_model(
+                model_name=model_name,
                 contents=prompt,
                 config=config,
             )
+            self._log_usage(response, AIFeature.SUGGESTIONS.value)
             if not response.text:
                 raise AIServiceError("No se recibió sugerencia de texto del modelo")
 
@@ -317,11 +373,12 @@ class AIService:
                 citation_data=citation_json,
             )
 
-            response = self.client.models.generate_content(
-                model=model_name,
+            response = await self._call_model(
+                model_name=model_name,
                 contents=prompt,
                 config=config,
             )
+            self._log_usage(response, AIFeature.CITATIONS.value)
             if not response.text:
                 raise AIServiceError("No se recibió cita formateada del modelo")
 
@@ -366,13 +423,17 @@ class AIService:
                 AIFeature.BIBLIOGRAPHY, plan, use_grounding=True
             )
 
-            # Construir contexto adicional
+            # Construir contexto adicional (truncado server-side, cost guard).
             context_str = ""
             if project_context:
-                context_str += f"\nCONTEXTO DEL PROYECTO:\n{project_context}"
+                context_str += (
+                    "\nCONTEXTO DEL PROYECTO:\n"
+                    f"{truncate_context(project_context, BIBLIOGRAPHY_CONTEXT_MAX_CHARS)}"
+                )
             if search_context:
                 context_str += (
-                    f"\nCONTEXTO DE LA BÚSQUEDA (Documento actual):\n{search_context}"
+                    "\nCONTEXTO DE LA BÚSQUEDA (Documento actual):\n"
+                    f"{truncate_context(search_context, BIBLIOGRAPHY_CONTEXT_MAX_CHARS)}"
                 )
 
             # Construir el prompt optimizado para Grounding EN ESPAÑOL
@@ -390,11 +451,12 @@ class AIService:
             FUENTES EN ESPAÑOL ENCONTRADAS (JSON):"""
 
             # Generar contenido con Grounding habilitado
-            response = self.client.models.generate_content(
-                model=model_name,
+            response = await self._call_model(
+                model_name=model_name,
                 contents=prompt,
                 config=config,
             )
+            self._log_usage(response, AIFeature.BIBLIOGRAPHY.value)
 
             response_text = ""
             if (
@@ -579,9 +641,13 @@ class AIService:
         except Exception:
             return "Fuente web"
 
-    def generate_conversation_title(self, message: str, response: str) -> str | None:
+    async def generate_conversation_title(
+        self, message: str, response: str
+    ) -> str | None:
         """
         Genera un título corto para una conversación basado en el primer mensaje y su respuesta.
+
+        Cuenta dentro del costo de chat (sin enforcement separado).
 
         Args:
             message: El mensaje del usuario
@@ -604,11 +670,12 @@ class AIService:
                 max_output_tokens=60,
             )
 
-            result = self.client.models.generate_content(
-                model=model_name,
+            result = await self._call_model(
+                model_name=model_name,
                 contents=prompt,
                 config=title_config,
             )
+            self._log_usage(result, AIFeature.CHAT.value)
 
             if not result or not result.text:
                 return None

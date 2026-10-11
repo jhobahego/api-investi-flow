@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi import status
+from fastapi import HTTPException, status
 
 from app.database import Base
 from app.services.ai_service import AIServiceError, ModelNotAvailableError
@@ -16,6 +16,14 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def disable_gemini_guard(monkeypatch):
+    """El cost guard se prueba en test_gemini_guard.py; aqui no debe
+    interferir ni exigir Redis real (los contadores en memoria son
+    globales al proceso y se acumularian entre tests)."""
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
 
 
 def create_test_user_and_login():
@@ -596,3 +604,94 @@ class TestConversations:
             headers=headers,
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+class TestCostGuard:
+    """Tests del cost guard en endpoints (con mocks, sin Redis real)"""
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    @patch("app.services.ai_service.ai_service.suggest_text")
+    def test_suggestions_enforce_called(self, mock_suggest_text, mock_enforce):
+        """El endpoint de sugerencias llama al guard antes del servicio"""
+        headers, _ = create_test_user_and_login()
+        mock_suggest_text.return_value = ("Sugerencia.", "gemini-2.5-flash-lite")
+
+        response = client.post(
+            "/api/v1/ia/sugerencias",
+            json={
+                "editor_state": {
+                    "text": "El machine learning es",
+                    "full_document_content": "Documento",
+                }
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        mock_enforce.assert_called_once()
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    def test_suggestions_429_propagates_retry_after(self, mock_enforce):
+        """Un 429 del guard se propaga con header Retry-After"""
+        mock_enforce.side_effect = HTTPException(
+            status_code=429,
+            detail="Demasiadas peticiones",
+            headers={"Retry-After": "60"},
+        )
+        headers, _ = create_test_user_and_login()
+
+        response = client.post(
+            "/api/v1/ia/sugerencias",
+            json={
+                "editor_state": {
+                    "text": "Test",
+                    "full_document_content": "Test document",
+                }
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.headers.get("retry-after") == "60"
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    def test_suggestions_413_propagates(self, mock_enforce):
+        """Un 413 del guard se propaga sin llamar al servicio"""
+        mock_enforce.side_effect = HTTPException(
+            status_code=413,
+            detail="El prompt supera 12000 caracteres",
+        )
+        headers, _ = create_test_user_and_login()
+
+        response = client.post(
+            "/api/v1/ia/sugerencias",
+            json={
+                "editor_state": {
+                    "text": "Test",
+                    "full_document_content": "Test document",
+                }
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+
+    @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
+    def test_chat_429_propagates_retry_after(self, mock_enforce):
+        """Un 429 del guard en chat se propaga con header Retry-After"""
+        mock_enforce.side_effect = HTTPException(
+            status_code=429,
+            detail="Demasiadas peticiones",
+            headers={"Retry-After": "30"},
+        )
+        headers, _ = create_test_user_and_login()
+        project_id = create_test_project(headers)
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/chat",
+            json={"message": "Hola"},
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.headers.get("retry-after") == "30"

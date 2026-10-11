@@ -1,11 +1,13 @@
+import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.ai_config import UserPlan
+from app.core.ai_config import AIFeature, UserPlan
 from app.core.ai_prompts import format_bibliography_context, format_project_context
 from app.core.dependencies import get_current_user
+from app.core.gemini_guard import enforce_gemini_limits
 from app.database import get_db
 from app.models.user import User
 from app.repositories.bibliography_repository import bibliography_repository
@@ -87,6 +89,7 @@ project_router = APIRouter()
 )
 async def generate_suggestion(
     request: SuggestionRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SuggestionResponse:
@@ -95,6 +98,7 @@ async def generate_suggestion(
 
     Args:
         request: Datos de la solicitud (texto, documento, bibliografía, contexto)
+        http_request: Request HTTP (para la IP real del cost guard)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -110,6 +114,15 @@ async def generate_suggestion(
         # TODO: Determinar el plan del usuario desde la base de datos
         # Por ahora hardcodeamos el plan según el rol o usamos un plan por defecto
         user_plan = UserPlan.ESTUDIANTE  # Hardcodeado temporalmente
+
+        # Cost guard Fase 1: pre-check barato con el texto del usuario.
+        await enforce_gemini_limits(
+            http_request,
+            user_id=str(current_user.id),
+            feature=AIFeature.SUGGESTIONS,
+            plan=user_plan,
+            prompt_text=request.editor_state.text,
+        )
 
         # Formatear contexto del proyecto si está disponible
         project_context_str = None
@@ -147,6 +160,10 @@ async def generate_suggestion(
             suggestion=suggestion,
             model_used=model_used,
         )
+
+    except HTTPException:
+        # Re-raise (cost guard 413/429/503) para que FastAPI las maneje.
+        raise
 
     except ModelNotAvailableError as e:
         logger.warning(
@@ -232,6 +249,7 @@ async def generate_suggestion(
 async def format_citation(
     project_id: int,
     request: CitationRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CitationResponse:
@@ -241,6 +259,7 @@ async def format_citation(
     Args:
         project_id: ID del proyecto
         request: Datos de la fuente a formatear
+        http_request: Request HTTP (para la IP real del cost guard)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -302,6 +321,16 @@ async def format_citation(
             "titulo_libro": request.titulo_libro,
             "institucion": request.institucion,
         }
+        citation_json = json.dumps(citation_data, ensure_ascii=False)
+
+        # Cost guard Fase 1: pre-check barato con los datos de la cita.
+        await enforce_gemini_limits(
+            http_request,
+            user_id=str(current_user.id),
+            feature=AIFeature.CITATIONS,
+            plan=user_plan,
+            prompt_text=citation_json,
+        )
 
         # Llamar al servicio de IA
         citation, model_used = await ai_service.format_citation(
@@ -405,6 +434,7 @@ async def format_citation(
 async def search_bibliography(
     project_id: int,
     request: BibliographyRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BibliographyResponse:
@@ -414,6 +444,7 @@ async def search_bibliography(
     Args:
         project_id: ID del proyecto
         request: Consulta de búsqueda y parámetros
+        http_request: Request HTTP (para la IP real del cost guard)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -444,6 +475,15 @@ async def search_bibliography(
         # TODO: Determinar el plan del usuario desde la base de datos
         # Por ahora usamos plan investigador (tiene acceso a bibliografía)
         user_plan = UserPlan.INVESTIGADOR
+
+        # Cost guard Fase 1: pre-check barato con la query del usuario.
+        await enforce_gemini_limits(
+            http_request,
+            user_id=str(current_user.id),
+            feature=AIFeature.BIBLIOGRAPHY,
+            plan=user_plan,
+            prompt_text=request.query,
+        )
 
         # Formatear contexto del proyecto si se proporciona en el request
         project_context_str = None
@@ -799,6 +839,7 @@ async def delete_conversation(
 async def chat_with_persistent_history(  # noqa: C901
     project_id: int,
     request: ChatWithHistoryRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ChatWithHistoryResponse:
@@ -821,6 +862,19 @@ async def chat_with_persistent_history(  # noqa: C901
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Proyecto no encontrado o sin acceso",
             )
+
+        # TODO: Obtener del usuario
+        user_plan = UserPlan.PROFESIONAL
+
+        # Cost guard Fase 1: pre-check barato con el mensaje del usuario,
+        # antes de crear la conversacion y armar el contexto.
+        await enforce_gemini_limits(
+            http_request,
+            user_id=str(current_user.id),
+            feature=AIFeature.CHAT,
+            plan=user_plan,
+            prompt_text=request.message,
+        )
 
         # Obtener o crear conversación
         if request.conversation_id:
@@ -1114,8 +1168,7 @@ async def chat_with_persistent_history(  # noqa: C901
             tareas_summary=tareas_summary,
         )
 
-        # Llamar al servicio de IA
-        user_plan = UserPlan.PROFESIONAL  # TODO: Obtener del usuario
+        # Llamar al servicio de IA (plan hardcodeado arriba, con su TODO)
         response_text, model_used = await ai_service.chat(
             message=request.message,
             history=history_for_ai,
@@ -1133,9 +1186,10 @@ async def chat_with_persistent_history(  # noqa: C901
         )
 
         # Generar título para conversaciones nuevas si no se proporcionó uno
+        # (cuenta dentro del costo de chat, sin enforcement separado)
         if not request.conversation_id and not request.title:
             try:
-                new_title = ai_service.generate_conversation_title(
+                new_title = await ai_service.generate_conversation_title(
                     message=request.message, response=response_text
                 )
                 if new_title:

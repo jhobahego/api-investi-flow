@@ -132,6 +132,22 @@ FEATURE_GENERATION_CONFIG: dict[AIFeature, dict[str, float | int]] = {
 
 
 # =============================================================================
+# BOLSAS DE TOKENS POR PLAN (Gemini cost guard, Fase 1)
+# =============================================================================
+# PROFESIONAL es ilimitado en count pero SIEMPRE acotado por estas bolsas
+# y por el techo global: una cuenta PRO comprometida no puede ser infinita.
+
+USER_TOKENS_PER_DAY: dict[UserPlan, int] = {
+    UserPlan.ESTUDIANTE: 100_000,
+    UserPlan.INVESTIGADOR: 400_000,
+    UserPlan.PROFESIONAL: 1_000_000,
+}
+
+# Sub-techo de bibliography dentro de la bolsa del usuario (grounding es caro).
+BIBLIOGRAPHY_TOKENS_PER_DAY_PER_USER: int = 300_000
+
+
+# =============================================================================
 # FUNCIONES AUXILIARES
 # =============================================================================
 
