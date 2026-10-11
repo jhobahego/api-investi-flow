@@ -102,6 +102,9 @@ Forecast: ~350–450 líneas autoradas (guard ~220 + instrumentación ~60 + endp
 - `6f10342` feat(api): enforce Gemini cost guard on the four AI endpoints (G3)
 - `6eebe66` test(ai): cover Gemini cost guard on endpoints and document rate-limit env (G4)
 - `81908d2` docs(guard): close Fase 1 with checklist, verification evidence and hashes
+
+## Delivery
+- Rama pusheada a `origin/feat/gemini-cost-guard`; PR #30 contra `develop`: https://github.com/jhobahego/api-investi-flow/pull/30 (merge pendiente, decisión del usuario; al mergear, Render redeploya y aplica guard + proxy-headers).
 - Parent spot check 2026-10-11: `pytest tests/test_core/test_gemini_guard.py tests/test_api/test_ai_assistant.py` → 35 passed.
 - 2026-10-11: proxy-headers para Render aplicado al `Dockerfile` (sin `--reload`, puerto `${PORT:-8000}`, `--forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}"`). En Render fijar `FORWARDED_ALLOW_IPS=*` (o CIDR interno) como env var; `.env`/`.env.example` los configura el usuario en dashboard (lectura bloqueada por regla del repo).
 
