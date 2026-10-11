@@ -47,7 +47,7 @@ Notas: PROFESIONAL ilimitado en count pero SIEMPRE acotado por bolsa tokens + gl
 ## Authorized scope
 - `app/core/gemini_guard.py` (nuevo)
 - `app/core/config.py`
-- `app/core/ai_config.py` (solo añadirốc techos tokens/bolsas si hace falta; no cambiar modelos)
+- `app/core/ai_config.py` (solo añadir techos tokens/bolsas si hace falta; no cambiar modelos)
 - `app/services/ai_service.py`
 - `app/api/api_v1/endpoints/ai_assistant.py`
 - `app/middleware/` (solo guard Content-Length acotado a rutas IA, si se crea)
@@ -101,9 +101,11 @@ Forecast: ~350–450 líneas autoradas (guard ~220 + instrumentación ~60 + endp
 - `632ea4c` feat(ai): add usage logging, semaphore, timeout and server-side truncation (G2)
 - `6f10342` feat(api): enforce Gemini cost guard on the four AI endpoints (G3)
 - `6eebe66` test(ai): cover Gemini cost guard on endpoints and document rate-limit env (G4)
+- `81908d2` docs(guard): close Fase 1 with checklist, verification evidence and hashes
+- Parent spot check 2026-10-11: `pytest tests/test_core/test_gemini_guard.py tests/test_api/test_ai_assistant.py` → 35 passed.
 
 ## Next step
-- G1: writer guard + settings + dep.
+- Fase 1 cerrada en `feat/gemini-cost-guard` (5 commits, sin push/PR). Siguiente: configurar `RATE_LIMIT_REDIS_URL` de Upstash en Render + medir comandos 24h y ajustar `GEMINI_GLOBAL_TOKENS_DAY` con la fórmula de la guía; fuera de alcance: workers Celery en prod, fix mypy-`deprecated` (propuesto: subir mypy u override por módulo).
 
 ## Engram mirror
 - Guardar espejo completo bajo topic `odd/gemini-cost-guard/tasks`, proyecto `api-investi-flow`.
