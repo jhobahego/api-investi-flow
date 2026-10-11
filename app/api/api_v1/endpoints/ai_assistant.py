@@ -98,7 +98,7 @@ async def generate_suggestion(
 
     Args:
         request: Datos de la solicitud (texto, documento, bibliografía, contexto)
-        http_request: Request HTTP (para la IP real del cost guard)
+        http_request: HTTP Request (for the cost guard real IP)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -115,7 +115,7 @@ async def generate_suggestion(
         # Por ahora hardcodeamos el plan según el rol o usamos un plan por defecto
         user_plan = UserPlan.ESTUDIANTE  # Hardcodeado temporalmente
 
-        # Cost guard Fase 1: pre-check barato con el texto del usuario.
+        # Phase 1 cost guard: cheap pre-check with the user text.
         await enforce_gemini_limits(
             http_request,
             user_id=str(current_user.id),
@@ -162,7 +162,7 @@ async def generate_suggestion(
         )
 
     except HTTPException:
-        # Re-raise (cost guard 413/429/503) para que FastAPI las maneje.
+        # Re-raise (cost guard 413/429/503) so FastAPI handles them.
         raise
 
     except ModelNotAvailableError as e:
@@ -259,7 +259,7 @@ async def format_citation(
     Args:
         project_id: ID del proyecto
         request: Datos de la fuente a formatear
-        http_request: Request HTTP (para la IP real del cost guard)
+        http_request: HTTP Request (for the cost guard real IP)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -323,7 +323,7 @@ async def format_citation(
         }
         citation_json = json.dumps(citation_data, ensure_ascii=False)
 
-        # Cost guard Fase 1: pre-check barato con los datos de la cita.
+        # Phase 1 cost guard: cheap pre-check with the citation data.
         await enforce_gemini_limits(
             http_request,
             user_id=str(current_user.id),
@@ -444,7 +444,7 @@ async def search_bibliography(
     Args:
         project_id: ID del proyecto
         request: Consulta de búsqueda y parámetros
-        http_request: Request HTTP (para la IP real del cost guard)
+        http_request: HTTP Request (for the cost guard real IP)
         current_user: Usuario autenticado
         db: Sesión de base de datos
 
@@ -476,7 +476,7 @@ async def search_bibliography(
         # Por ahora usamos plan investigador (tiene acceso a bibliografía)
         user_plan = UserPlan.INVESTIGADOR
 
-        # Cost guard Fase 1: pre-check barato con la query del usuario.
+        # Phase 1 cost guard: cheap pre-check with the user query.
         await enforce_gemini_limits(
             http_request,
             user_id=str(current_user.id),
@@ -863,11 +863,11 @@ async def chat_with_persistent_history(  # noqa: C901
                 detail="Proyecto no encontrado o sin acceso",
             )
 
-        # TODO: Obtener del usuario
+        # TODO: Get from the user
         user_plan = UserPlan.PROFESIONAL
 
-        # Cost guard Fase 1: pre-check barato con el mensaje del usuario,
-        # antes de crear la conversacion y armar el contexto.
+        # Phase 1 cost guard: cheap pre-check with the user message,
+        # before creating the conversation and building the context.
         await enforce_gemini_limits(
             http_request,
             user_id=str(current_user.id),
@@ -1168,7 +1168,7 @@ async def chat_with_persistent_history(  # noqa: C901
             tareas_summary=tareas_summary,
         )
 
-        # Llamar al servicio de IA (plan hardcodeado arriba, con su TODO)
+        # Call the AI service (plan hardcoded above, with its TODO)
         response_text, model_used = await ai_service.chat(
             message=request.message,
             history=history_for_ai,
@@ -1186,7 +1186,7 @@ async def chat_with_persistent_history(  # noqa: C901
         )
 
         # Generar título para conversaciones nuevas si no se proporcionó uno
-        # (cuenta dentro del costo de chat, sin enforcement separado)
+        # (counts toward chat cost, no separate enforcement)
         if not request.conversation_id and not request.title:
             try:
                 new_title = await ai_service.generate_conversation_title(

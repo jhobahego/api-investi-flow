@@ -1,4 +1,4 @@
-"""Tests for the Gemini cost guard (Fase 1).
+"""Tests for the Gemini cost guard (Phase 1).
 
 The guard enforces per-IP, per-user and token-budget limits before any
 Gemini call. These tests run against in-memory storage only and never
@@ -143,7 +143,7 @@ async def test_redis_failure_falls_back_to_memory(
                 plan=UserPlan.PROFESIONAL,
                 prompt_text="hello",
             )
-    assert "Redis no disponible" in caplog.text
+    assert "Redis unavailable" in caplog.text
     with pytest.raises(HTTPException) as exc_info:
         await guard.enforce_gemini_limits(
             request,

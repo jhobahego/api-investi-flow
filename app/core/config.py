@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
 
-    # Gemini cost guard (Fase 1, Upstash Redis free)
+    # Gemini cost guard (Phase 1, free Upstash Redis)
     RATE_LIMIT_REDIS_URL: Optional[str] = None
     RATE_LIMIT_ENABLED: bool = True
     GEMINI_GLOBAL_TOKENS_DAY: int = 1000000
