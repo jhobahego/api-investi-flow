@@ -33,7 +33,7 @@ RUN mkdir -p uploads/documents uploads/temp
 # Exponer el puerto
 EXPOSE 8000
 
-# Comando por defecto (producción): sin --reload, puerto vía $PORT (Render lo
-# inyecta, default 10000) y proxy headers confiando solo en
-# $FORWARDED_ALLOW_IPS (en Render: "*" o el CIDR interno observado en logs).
+# Default command (production): no --reload, port via $PORT (Render
+# injects it, default 10000) and proxy headers trusting only
+# $FORWARDED_ALLOW_IPS (on Render: "*" or the internal CIDR seen in logs).
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}"

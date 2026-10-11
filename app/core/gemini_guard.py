@@ -1,25 +1,25 @@
-"""Gemini cost guard (Fase 1): rate limit en app con Upstash Redis free.
+"""Gemini cost guard (Phase 1): in-app rate limiting with free Upstash Redis.
 
-Capas (barato -> caro, para no gastar el presupuesto global en rechazados):
-  0. Prefiltro local por IP en memoria (60/min, 0 comandos Redis).
-  1. IP/min en Redis (moving window, 20/min).
-  2. Usuario + feature/min en Redis (moving window).
-  3. Usuario + feature/dia en count desde PLAN_LIMITS (fixed window;
-     -1 = ilimitado, 0 = bloqueado con 403).
-  4. Bolsa de tokens/dia por usuario (fixed window, costo = peor caso).
-  5. Sub-techo de bibliography (fixed window, 300k/dia/usuario).
-  6. Techo global de tokens/dia (fixed window, 503 con Retry-After).
+Layers (cheap -> expensive, to avoid spending the global budget on rejected requests):
+  0. Local per-IP in-memory prefilter (60/min, 0 Redis commands).
+  1. Per-IP/min in Redis (moving window, 20/min).
+  2. Per-user + feature/min in Redis (moving window).
+  3. Per-user + feature/day count from PLAN_LIMITS (fixed window;
+     -1 = unlimited, 0 = blocked with 403).
+  4. Per-user daily token budget (fixed window, cost = worst case).
+  5. Bibliography sub-cap (fixed window, 300k/day/user).
+  6. Global daily token ceiling (fixed window, 503 with Retry-After).
 
-Notas:
-  - RATE_LIMIT_REDIS_URL y el broker de Celery son independientes: este
-    guard solo usa RATE_LIMIT_REDIS_URL (Upstash `async+rediss://` en prod,
-    `async+redis://` local). Celery no se usa en prod.
-  - Sin Redis (URL invalida o servidor caido) se sigue limitando con
-    fallback en memoria + log "Redis no disponible".
-  - RATE_LIMIT_ENABLED=false = bypass total (solo tests).
-  - El truncado server-side del contexto vive en `app/services/ai_service.py`
-    (un solo lugar, protege a todos los callers): chat <=12000 chars,
-    suggestions doc <=12000, bibliography contextos <=6000.
+Notes:
+  - RATE_LIMIT_REDIS_URL and the Celery broker are independent: this
+    guard only uses RATE_LIMIT_REDIS_URL (Upstash `async+rediss://` in prod,
+    `async+redis://` locally). Celery is not used in prod.
+  - Without Redis (invalid URL or down server) limiting continues with
+    in-memory fallback + "Redis unavailable" log.
+  - RATE_LIMIT_ENABLED=false = total bypass (tests only).
+  - Server-side context truncation lives in `app/services/ai_service.py`
+    (single place, protects all callers): chat <=12000 chars,
+    suggestions doc <=12000, bibliography contexts <=6000.
 """
 
 import logging
@@ -48,17 +48,17 @@ try:
     from limits.storage import storage_from_string
 
     _LIMITS_AVAILABLE = True
-except ImportError:  # pragma: no cover - solo sin instalar la dep
+except ImportError:  # pragma: no cover - only without the dep installed
     _LIMITS_AVAILABLE = False
 
 
-# ---------------------------------------------------------------- constantes
+# ----------------------------------------------------------------- constants
 
-# Prefiltro local: floods obvios sin gastar comandos de Redis.
+# Local prefilter: obvious floods without spending Redis commands.
 LOCAL_IP_PREFILTER_PER_MIN = 60
-# IP/min compartido (varias personas pueden compartir IP).
+# Shared IP/min (several people may share one IP).
 IP_PER_MIN = 20
-# Usuario + feature/min (lo que un humano usa de verdad).
+# User + feature/min (what a human actually uses).
 USER_PER_MIN: dict[AIFeature, int] = {
     AIFeature.CHAT: 5,
     AIFeature.SUGGESTIONS: 10,
@@ -66,7 +66,7 @@ USER_PER_MIN: dict[AIFeature, int] = {
     AIFeature.BIBLIOGRAPHY: 3,
 }
 
-# 413: prompt del usuario por feature (el contexto completo va truncado aparte).
+# 413: per-feature user prompt (full context is truncated separately).
 PROMPT_MAX_CHARS: dict[AIFeature, int] = {
     AIFeature.CHAT: 5000,
     AIFeature.SUGGESTIONS: 12000,
@@ -74,7 +74,7 @@ PROMPT_MAX_CHARS: dict[AIFeature, int] = {
     AIFeature.BIBLIOGRAPHY: 6000,
 }
 
-# Techos de truncado server-side (aplicados en ai_service, un solo lugar).
+# Server-side truncation caps (applied in ai_service, single place).
 CHAT_CONTEXT_MAX_CHARS = 12000
 SUGGESTION_DOC_MAX_CHARS = 12000
 BIBLIOGRAPHY_CONTEXT_MAX_CHARS = 6000
@@ -82,7 +82,7 @@ BIBLIOGRAPHY_CONTEXT_MAX_CHARS = 6000
 _DEFAULT_GLOBAL_TOKENS_DAY = 1000000
 
 
-# ------------------------------------------------------- almacenamiento
+# ------------------------------------------------------------ storage
 if _LIMITS_AVAILABLE:
     from limits import RateLimitItem  # noqa: E402
 
@@ -103,7 +103,7 @@ if _LIMITS_AVAILABLE:
                 max_connections=5,
             )
         except Exception:
-            logger.exception("Redis no disponible, usando límites en memoria")
+            logger.exception("Redis unavailable, using in-memory limits")
             return MemoryStorage()
 
     _redis_storage = _build_redis_storage()
@@ -118,7 +118,7 @@ if _LIMITS_AVAILABLE:
         "fixed": FixedWindowRateLimiter(_memory_storage),
     }
     _LOCAL = MovingWindowRateLimiter(MemoryStorage())
-else:  # pragma: no cover - solo sin instalar la dep
+else:  # pragma: no cover - only without the dep installed
     RateLimitItem = object  # type: ignore[assignment,misc]
     LOCAL_IP_PREFILTER = None
     IP_LIMIT = None
@@ -127,21 +127,21 @@ else:  # pragma: no cover - solo sin instalar la dep
     _LOCAL = None
 
 
-# ------------------------------------------------------------- utilidades
+# ----------------------------------------------------------------- helpers
 def estimate_tokens(text: str) -> int:
-    """Estimacion conservadora (~3 caracteres por token)."""
+    """Conservative estimate (~3 characters per token)."""
     return max(1, len(text) // 3)
 
 
 def client_ip(http_request: Request) -> str:
-    """IP real via request.client.host (uvicorn --proxy-headers)."""
+    """Real IP via request.client.host (uvicorn --proxy-headers)."""
     if http_request.client is None:
         return "unknown"
     return http_request.client.host
 
 
 def truncate_context(text: str | None, max_chars: int) -> str | None:
-    """Truncado server-side del contexto antes de llamar a Gemini."""
+    """Server-side truncation of context before calling Gemini."""
     if text is None:
         return None
     if len(text) <= max_chars:
@@ -185,13 +185,13 @@ def _max_output_tokens(feature: AIFeature) -> int:
 
 
 async def _hit(kind: str, item: object, ids: tuple[str, ...], cost: int) -> bool:
-    """Un hit contra Redis con fallback a memoria si Redis falla."""
+    """One hit against Redis with in-memory fallback if Redis fails."""
     if kind == "local":
         return await _LOCAL.hit(item, *ids, cost=cost)  # type: ignore[union-attr]
     try:
         return await _REDIS[kind].hit(item, *ids, cost=cost)  # type: ignore[union-attr]
     except Exception:
-        logger.exception("Redis no disponible, usando límites en memoria")
+        logger.exception("Redis unavailable, using in-memory limits")
         return await _MEM[kind].hit(item, *ids, cost=cost)  # type: ignore[union-attr]
 
 
@@ -220,24 +220,24 @@ async def enforce_gemini_limits(
     plan: UserPlan | str,
     prompt_text: str,
 ) -> None:
-    """Aplica los limites Fase 1 antes de llamar a Gemini.
+    """Enforce Phase 1 limits before calling Gemini.
 
     Args:
-        http_request: Request de FastAPI (para la IP real).
-        user_id: Identificador estable del usuario.
-        feature: Feature de IA (chat, suggestions, citations, bibliography).
-        plan: Plan del usuario (estudiante, investigador, profesional).
-        prompt_text: Mensaje/query/texto del usuario (pre-check barato).
+        http_request: FastAPI Request (for the real IP).
+        user_id: Stable user identifier.
+        feature: AI feature (chat, suggestions, citations, bibliography).
+        plan: User plan (estudiante, investigador, profesional).
+        prompt_text: User message/query/text (cheap pre-check).
 
     Raises:
-        HTTPException: 413 si el prompt supera el cap, 403 si el plan no
-            tiene acceso, 429 si se excede un limite, 503 si el techo
-            global se agoto.
+        HTTPException: 413 if the prompt exceeds the cap, 403 if the plan
+            has no access, 429 if a limit is exceeded, 503 if the global
+            ceiling is exhausted.
     """
     if not _rate_limit_enabled():
         return
     if not _LIMITS_AVAILABLE:
-        logger.warning("limits no instalado, sin rate limiting")
+        logger.warning("limits not installed, rate limiting disabled")
         return
 
     feat = _normalize_feature(feature)
@@ -247,35 +247,35 @@ async def enforce_gemini_limits(
     if len(prompt_text) > max_chars:
         raise HTTPException(
             status_code=413,
-            detail=f"El prompt supera {max_chars} caracteres",
+            detail=f"Prompt exceeds {max_chars} characters",
         )
 
     ip = client_ip(http_request)
     cost = estimate_tokens(prompt_text) + _max_output_tokens(feat)
 
-    # Orden barato -> caro: lo global va al final para no gastar presupuesto
-    # en peticiones que ya fueron rechazadas.
+    # Cheap -> expensive order: global goes last to avoid spending budget
+    # on requests that were already rejected.
     if not await _hit("local", LOCAL_IP_PREFILTER, ("ip-local", ip), 1):
         retry = await _retry_after("local", LOCAL_IP_PREFILTER, ("ip-local", ip))
-        raise _deny(429, "Demasiadas peticiones", retry)
+        raise _deny(429, "Too many requests", retry)
 
     if not await _hit("moving", IP_LIMIT, ("ip", ip), 1):
         retry = await _retry_after("moving", IP_LIMIT, ("ip", ip))
-        raise _deny(429, "Demasiadas peticiones desde tu IP", retry)
+        raise _deny(429, "Too many requests from your IP", retry)
 
     user_min = parse(f"{USER_PER_MIN[feat]}/minute")
     user_min_ids = ("user-min", user_id, feat.value)
     if not await _hit("moving", user_min, user_min_ids, 1):
         retry = await _retry_after("moving", user_min, user_min_ids)
-        raise _deny(429, "Demasiadas peticiones, espera un momento", retry)
+        raise _deny(429, "Too many requests, please wait a moment", retry)
 
     daily_count = get_usage_limit(user_plan, feat)
     if daily_count == 0:
         raise HTTPException(
             status_code=403,
             detail=(
-                f"La funcionalidad '{feat.value}' no esta disponible "
-                f"en tu plan actual. Actualiza tu plan para usarla."
+                f"Feature '{feat.value}' is not available "
+                f"on your current plan. Upgrade your plan to use it."
             ),
         )
     if daily_count > 0:
@@ -283,24 +283,24 @@ async def enforce_gemini_limits(
         count_ids = ("user-feature-count", user_id, feat.value)
         if not await _hit("fixed", count_limit, count_ids, 1):
             retry = await _retry_after("fixed", count_limit, count_ids)
-            raise _deny(429, "Alcanzaste tu limite diario de usos", retry)
+            raise _deny(429, "You reached your daily usage limit", retry)
 
     user_budget = USER_TOKENS_PER_DAY[user_plan]
     user_tokens = parse(f"{user_budget}/day")
     user_token_ids = ("user-tokens", user_id)
     if not await _hit("fixed", user_tokens, user_token_ids, cost):
         retry = await _retry_after("fixed", user_tokens, user_token_ids)
-        raise _deny(429, "Alcanzaste tu cuota diaria de tokens", retry)
+        raise _deny(429, "You reached your daily token quota", retry)
 
     if feat == AIFeature.BIBLIOGRAPHY:
         subcap = parse(f"{BIBLIOGRAPHY_TOKENS_PER_DAY_PER_USER}/day")
         subcap_ids = ("user-biblio-tokens", user_id)
         if not await _hit("fixed", subcap, subcap_ids, cost):
             retry = await _retry_after("fixed", subcap, subcap_ids)
-            raise _deny(429, "Alcanzaste tu cuota diaria de bibliografia", retry)
+            raise _deny(429, "You reached your daily bibliography quota", retry)
 
     global_limit = parse(f"{_global_tokens_day()}/day")
     global_ids = ("global-tokens",)
     if not await _hit("fixed", global_limit, global_ids, cost):
         retry = await _retry_after("fixed", global_limit, global_ids)
-        raise _deny(503, "Servicio temporalmente saturado", retry)
+        raise _deny(503, "Service temporarily saturated", retry)

@@ -20,9 +20,9 @@ def setup_database():
 
 @pytest.fixture(autouse=True)
 def disable_gemini_guard(monkeypatch):
-    """El cost guard se prueba en test_gemini_guard.py; aqui no debe
-    interferir ni exigir Redis real (los contadores en memoria son
-    globales al proceso y se acumularian entre tests)."""
+    """The cost guard is tested in test_gemini_guard.py; here it must
+    not interfere nor require a real Redis (in-memory counters are
+    process-global and would accumulate across tests)."""
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
 
 
@@ -607,12 +607,12 @@ class TestConversations:
 
 
 class TestCostGuard:
-    """Tests del cost guard en endpoints (con mocks, sin Redis real)"""
+    """Cost guard tests on endpoints (with mocks, no real Redis)"""
 
     @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
     @patch("app.services.ai_service.ai_service.suggest_text")
     def test_suggestions_enforce_called(self, mock_suggest_text, mock_enforce):
-        """El endpoint de sugerencias llama al guard antes del servicio"""
+        """Suggestions endpoint calls the guard before the service"""
         headers, _ = create_test_user_and_login()
         mock_suggest_text.return_value = ("Sugerencia.", "gemini-2.5-flash-lite")
 
@@ -632,10 +632,10 @@ class TestCostGuard:
 
     @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
     def test_suggestions_429_propagates_retry_after(self, mock_enforce):
-        """Un 429 del guard se propaga con header Retry-After"""
+        """A guard 429 propagates with Retry-After header"""
         mock_enforce.side_effect = HTTPException(
             status_code=429,
-            detail="Demasiadas peticiones",
+            detail="Too many requests",
             headers={"Retry-After": "60"},
         )
         headers, _ = create_test_user_and_login()
@@ -656,10 +656,10 @@ class TestCostGuard:
 
     @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
     def test_suggestions_413_propagates(self, mock_enforce):
-        """Un 413 del guard se propaga sin llamar al servicio"""
+        """A guard 413 propagates without calling the service"""
         mock_enforce.side_effect = HTTPException(
             status_code=413,
-            detail="El prompt supera 12000 caracteres",
+            detail="Prompt exceeds 12000 characters",
         )
         headers, _ = create_test_user_and_login()
 
@@ -678,10 +678,10 @@ class TestCostGuard:
 
     @patch("app.api.api_v1.endpoints.ai_assistant.enforce_gemini_limits")
     def test_chat_429_propagates_retry_after(self, mock_enforce):
-        """Un 429 del guard en chat se propaga con header Retry-After"""
+        """A guard 429 on chat propagates with Retry-After header"""
         mock_enforce.side_effect = HTTPException(
             status_code=429,
-            detail="Demasiadas peticiones",
+            detail="Too many requests",
             headers={"Retry-After": "30"},
         )
         headers, _ = create_test_user_and_login()

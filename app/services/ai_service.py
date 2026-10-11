@@ -30,7 +30,7 @@ from app.core.gemini_guard import (
 
 logger = logging.getLogger(__name__)
 
-# Maximo 5 llamadas simultaneas a Gemini (Fase 1, cost guard).
+# Max 5 concurrent Gemini calls (Phase 1, cost guard).
 _GEMINI_SEMAPHORE = asyncio.Semaphore(5)
 _GEMINI_TIMEOUT_SECONDS = 30
 
@@ -91,11 +91,11 @@ class AIService:
         contents: Any,
         config: types.GenerateContentConfig,
     ) -> Any:
-        """Llama a Gemini sin bloquear el event loop (semaforo + timeout).
+        """Call Gemini without blocking the event loop (semaphore + timeout).
 
-        El cliente `google-genai` sync se ejecuta en un thread via
-        `asyncio.to_thread`; el semaforo global limita a 5 llamadas
-        simultaneas y `wait_for` corta a los 30s.
+        The sync `google-genai` client runs in a thread via
+        `asyncio.to_thread`; the global semaphore caps at 5 concurrent
+        calls and `wait_for` cuts off at 30s.
         """
         async with _GEMINI_SEMAPHORE:
             return await asyncio.wait_for(
@@ -109,7 +109,7 @@ class AIService:
             )
 
     def _log_usage(self, response: Any, feature: str) -> None:
-        """Loggea `gemini_usage` desde `usage_metadata` (auditoria de costos)."""
+        """Log `gemini_usage` from `usage_metadata` (cost audit)."""
         usage = getattr(response, "usage_metadata", None)
         logger.info(
             "gemini_usage prompt=%s output=%s total=%s feature=%s",
@@ -208,8 +208,8 @@ class AIService:
         try:
             model_name, config = self._get_config(AIFeature.CHAT, plan)
 
-            # Truncado server-side (cost guard): el contexto nunca supera
-            # CHAT_CONTEXT_MAX_CHARS antes de llamar a Gemini.
+            # Server-side truncation (cost guard): context never exceeds
+            # CHAT_CONTEXT_MAX_CHARS before calling Gemini.
             project_context = truncate_context(project_context, CHAT_CONTEXT_MAX_CHARS)
 
             # Formatear el prompt del sistema con el contexto del proyecto
@@ -291,7 +291,7 @@ class AIService:
 
             model_name, config = self._get_config(AIFeature.SUGGESTIONS, plan)
 
-            # Truncado server-side (cost guard) del documento completo.
+            # Server-side truncation (cost guard) of the full document.
             document_content = (
                 truncate_context(document_content, SUGGESTION_DOC_MAX_CHARS) or ""
             )
@@ -423,7 +423,7 @@ class AIService:
                 AIFeature.BIBLIOGRAPHY, plan, use_grounding=True
             )
 
-            # Construir contexto adicional (truncado server-side, cost guard).
+            # Build extra context (server-side truncated, cost guard).
             context_str = ""
             if project_context:
                 context_str += (
@@ -647,7 +647,7 @@ class AIService:
         """
         Genera un título corto para una conversación basado en el primer mensaje y su respuesta.
 
-        Cuenta dentro del costo de chat (sin enforcement separado).
+        Counts toward chat cost (no separate enforcement).
 
         Args:
             message: El mensaje del usuario
