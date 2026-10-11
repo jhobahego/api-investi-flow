@@ -117,7 +117,9 @@ class ProjectContextField(BaseModel):
 class ChatWithHistoryRequest(BaseModel):
     """Request para chat con historial persistente"""
 
-    message: str = Field(..., description="Mensaje del usuario")
+    message: str = Field(
+        ..., description="Mensaje del usuario", min_length=1, max_length=5000
+    )
     conversation_id: int | None = Field(
         None,
         description="ID de conversación existente (si no se provee, se crea una nueva)",
