@@ -3,7 +3,7 @@ Endpoints para extracción y gestión de contenido de documentos
 """
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
@@ -308,7 +308,7 @@ async def update_document_content(
 async def search_document_content(
     attachment_id: int,
     q: str,
-    top_k: int = 5,
+    top_k: int = Query(default=5, ge=1, le=20),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:

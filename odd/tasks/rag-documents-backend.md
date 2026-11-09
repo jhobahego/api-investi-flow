@@ -124,6 +124,15 @@ User requested RAG viability assessment and implementation roadmap. The current 
 
 - Add a Background Worker service using the same image/repo, the same environment (`DATABASE_URL`, `GOOGLE_AI_API_KEY`, `AI_MODEL_EMBEDDING`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`) and start command `celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag`.
 - Staging/production must run `alembic upgrade head` and have Redis reachable; the RAG worker connection is independent from the rate-limit Redis.
+- The API and the worker are separate processes/services: the worker reads `attachment.file_path` from its own filesystem. On Render, mount a shared disk/volume at `UPLOAD_FOLDER` for both services, or move uploads to object storage. Otherwise the worker will find no files and index zero chunks.
+
+### Post-verification corrections (independent verifier)
+
+- `/documentos/{id}/search` was returning sibling attachment chunks: `retrieve_context()` now accepts an optional `attachment_id` and filters the PostgreSQL, Python and lexical paths; `retrieve_for_attachment()` passes it. A new test covers a project attachment plus a phase attachment in the same project.
+- Extraction failures no longer wipe a good index: `extract_text()` raises `RAGServiceError` on read/parse failures, and `index_attachment()` only deletes after embeddings succeed. PDF error strings (`"Error al extraer PDF: ..."`) are rejected instead of being embedded. Legacy `.doc` is skipped with a warning.
+- Chunks with NULL embeddings now fall back to lexical scoring instead of returning an empty result on SQLite.
+- `GET /documentos/{id}/search` bounds `top_k` to 1..20.
+- `RAG_INDEXING_ENABLED` moved to `Settings` (env override still works) and documented in `.env.example`.
 
 ### Design decisions / deviations
 
@@ -141,9 +150,9 @@ User requested RAG viability assessment and implementation roadmap. The current 
 - `.venv/bin/flake8 app/` → clean (no output).
 - `.venv/bin/python -c "from app.core.celery_app import celery_app; print(sorted(celery_app.tasks.keys()))"` → Celery built-ins only (`celery.accumulate`, ..., `celery.starmap`). With `celery_app.loader.import_default_modules()` (what the worker does at startup) the list also contains `rag.index_attachment`.
 - `.venv/bin/mypy app/` → fails **pre-existing/environmental** while parsing `.venv/lib/python3.12/site-packages/deprecated/sphinx.py:35` (`Type statement is only supported in Python 3.12 and greater`) because `mypy.ini` targets Python 3.11. The new Celery import is annotated `# type: ignore[import-untyped]`, and with `--python-version 3.12` only the same 7 pre-existing `gemini_guard.py` errors remain.
-- `.venv/bin/pytest tests/test_rag_service.py -v` → 20 passed (includes the Postgres distance-expression regression test).
-- `.venv/bin/pytest tests/test_api/test_ai_assistant.py tests/test_api/test_attachments.py tests/test_services/test_ai_service.py -v` → 89 passed.
+- `.venv/bin/pytest tests/test_rag_service.py -v` → 24 passed (Postgres distance regression, sibling-attachment scoping, NULL-embedding fallback, extraction-failure preservation, PDF error rejection).
+- `.venv/bin/pytest tests/test_rag_service.py tests/test_api/test_ai_assistant.py tests/test_api/test_attachments.py tests/test_services/test_ai_service.py -v` → 113 passed.
 - Full suite `.venv/bin/pytest -q` → 546 passed (run before the final Postgres distance fix; the fix only touches the Postgres branch plus a new test).
-- Live local E2E: Redis (docker) + Celery worker (`queue=rag`) + local Postgres with pgvector + real Google API. A DOCX was seeded, `enqueue_attachment_indexing()` returned `True`, the worker logged `Task rag.index_attachment ... succeeded`, 1 chunk was stored with `vector_dims = 768`, and `retrieve_context()` returned similarity `0.7513` for `rag-e2e.docx`. `retrieve_for_attachment()` with a non-owner user returned HTTP 403.
+- Live local E2E: Redis (docker) + Celery worker (`queue=rag`) + local Postgres with pgvector + real Google API. A DOCX was seeded, `enqueue_attachment_indexing()` returned `True`, the worker logged `Task rag.index_attachment ... succeeded`, 1 chunk was stored with `vector_dims = 768`, and `retrieve_context()` / `retrieve_for_attachment()` returned the chunk (similarity `0.723` after the correction; `0.7513` in the first run). `retrieve_for_attachment()` with a non-owner user returned HTTP 403.
 - Live Google model check: `text-embedding-004` returns `404 NOT_FOUND` on `v1beta`; `gemini-embedding-001` with `output_dimensionality=768` returns 768 dims. The default was changed to `gemini-embedding-001` and remains overridable via `AI_MODEL_EMBEDDING`.
 - Regression found and fixed during E2E: the `<=>` scalar inherited the `Vector` column type, so pgvector tried to parse a float as a vector. `_distance_expression()` now uses `return_type=Float()`; the test asserts the compiled PG expression type.

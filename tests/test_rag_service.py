@@ -429,3 +429,126 @@ def test_postgres_distance_expression_uses_float_result_type():
     assert isinstance(expression.type, Float)
     compiled = str(expression.compile(dialect=postgresql.dialect()))
     assert "<=>" in compiled
+
+
+def test_retrieve_for_attachment_excludes_siblings_in_same_project(
+    db_session, test_user, test_project, test_phase, monkeypatch
+):
+    """The document search endpoint must not return sibling attachment chunks."""
+    own = _make_attachment(
+        db_session, file_name="propio.docx", project_id=test_project.id
+    )
+    sibling = _make_attachment(
+        db_session, file_name="hermano.docx", phase_id=test_phase.id
+    )
+
+    db_session.add_all(
+        [
+            DocumentChunk(
+                attachment_id=own.id,
+                project_id=test_project.id,
+                chunk_index=0,
+                content="contenido propio",
+                embedding=_unit_vector(0),
+                token_count=1,
+            ),
+            DocumentChunk(
+                attachment_id=sibling.id,
+                project_id=test_project.id,
+                chunk_index=0,
+                content="contenido hermano",
+                embedding=_unit_vector(0),
+                token_count=1,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(rag_service, "embed_texts", lambda _texts: [_unit_vector(0)])
+
+    results = rag_service.retrieve_for_attachment(
+        db_session,
+        attachment_id=own.id,
+        user_id=test_user.id,
+        query="contenido",
+        top_k=5,
+    )
+
+    assert len(results) == 1
+    assert results[0]["attachment_id"] == own.id
+    assert results[0]["content"] == "contenido propio"
+
+
+def test_retrieve_context_falls_back_to_lexical_with_null_embeddings(
+    db_session, test_project, monkeypatch
+):
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    db_session.add(
+        DocumentChunk(
+            attachment_id=attachment.id,
+            project_id=test_project.id,
+            chunk_index=0,
+            content="inteligencia artificial en educacion",
+            embedding=None,
+            token_count=1,
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr(rag_service, "embed_texts", lambda _texts: [_unit_vector(0)])
+
+    results = rag_service.retrieve_context(
+        db_session, project_id=test_project.id, query="inteligencia educacion"
+    )
+
+    assert len(results) == 1
+    assert results[0]["similarity"] > 0
+
+
+def test_index_attachment_preserves_old_chunks_on_extraction_failure(
+    db_session, test_project, monkeypatch
+):
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    db_session.add(
+        DocumentChunk(
+            attachment_id=attachment.id,
+            project_id=test_project.id,
+            chunk_index=0,
+            content="indice anterior",
+            embedding=[0.1] * EMBEDDING_DIMENSION,
+            token_count=1,
+        )
+    )
+    db_session.commit()
+
+    def _fail_extract(_attachment):
+        raise RAGServiceError("no se pudo leer el archivo")
+
+    monkeypatch.setattr(rag_service, "extract_text", _fail_extract)
+
+    with pytest.raises(RAGServiceError):
+        rag_service.index_attachment(db_session, attachment)
+
+    assert (
+        db_session.query(DocumentChunk).filter_by(attachment_id=attachment.id).count()
+        == 1
+    )
+
+
+def test_extract_text_rejects_pdf_error_strings(db_session, test_project, monkeypatch):
+    attachment = _make_attachment(
+        db_session,
+        file_name="roto.pdf",
+        file_path="/tmp/roto.pdf",
+        file_type=FileType.PDF,
+        project_id=test_project.id,
+    )
+
+    monkeypatch.setattr(
+        "app.services.document_extraction_service.document_extraction_service."
+        "extract_pdf_to_text",
+        lambda *_args, **_kwargs: "Error al extraer PDF: archivo corrupto",
+    )
+
+    with pytest.raises(RAGServiceError):
+        rag_service.extract_text(attachment)
