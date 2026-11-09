@@ -13,13 +13,15 @@ Layers (cheap -> expensive, to avoid spending the global budget on rejected requ
 Notes:
   - RATE_LIMIT_REDIS_URL and the Celery broker are independent: this
     guard only uses RATE_LIMIT_REDIS_URL (Upstash `async+rediss://` in prod,
-    `async+redis://` locally). Celery is not used in prod.
+    `async+redis://` locally). RAG document indexing runs on a Celery worker
+    over Redis, independent from the rate-limit Redis.
   - Without Redis (invalid URL or down server) limiting continues with
     in-memory fallback + "Redis unavailable" log.
   - RATE_LIMIT_ENABLED=false = total bypass (tests only).
   - Server-side context truncation lives in `app/services/ai_service.py`
     (single place, protects all callers): chat <=12000 chars,
-    suggestions doc <=12000, bibliography contexts <=6000.
+    suggestions doc <=12000, bibliography contexts <=6000,
+    retrieved RAG fragments <=8000.
 """
 
 import logging
@@ -78,6 +80,7 @@ PROMPT_MAX_CHARS: dict[AIFeature, int] = {
 CHAT_CONTEXT_MAX_CHARS = 12000
 SUGGESTION_DOC_MAX_CHARS = 12000
 BIBLIOGRAPHY_CONTEXT_MAX_CHARS = 6000
+RAG_CONTEXT_MAX_CHARS = 8000
 
 _DEFAULT_GLOBAL_TOKENS_DAY = 1000000
 
