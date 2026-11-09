@@ -10,7 +10,7 @@ MYPY = .venv/bin/mypy
 ALEMBIC = .venv/bin/alembic
 CELERY = .venv/bin/celery
 
-.PHONY: help install dev worker staging-smoke lint format test clean docker-build docker-up docker-down
+.PHONY: help install dev worker staging-worker staging-smoke lint format test clean docker-build docker-up docker-down
 
 help: ## Mostrar ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
@@ -23,6 +23,9 @@ dev: ## Ejecutar en modo desarrollo
 
 worker: ## Ejecutar el worker Celery de indexado RAG
 	$(CELERY) -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag
+
+staging-worker: ## Worker Celery local contra staging (lee .env.staging-worker)
+	scripts/run_staging_worker.sh
 
 staging-smoke: ## Smoke test RAG contra staging (requiere API_BASE_URL)
 	$(PYTHON) scripts/staging_rag_smoke_test.py

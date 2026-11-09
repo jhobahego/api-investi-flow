@@ -190,3 +190,11 @@ User requested RAG viability assessment and implementation roadmap. The current 
   - API y worker deben usar el **mismo** broker; en la prueba la API apuntaba a Upstash y el worker a Redis local, por eso no se procesaban los tasks.
   - El token local expira en 1 minuto (`ACCESS_TOKEN_EXPIRE_MINUTES=1`); el smoke test re-loguea una vez ante 401.
   - El hard delete de proyectos exige archivarlos primero; el smoke test hace archive + permanent.
+
+### Staging verification (2026-11-09)
+
+- The staging API enqueued 4 `rag.index_attachment_text` tasks while no worker was running; they stayed in the Upstash `rag` queue.
+- Root cause of "0 fragments": `.env.staging-worker` had `DATABASE_URL=...?sslmode=require&channel_binding=require` unquoted. `set -a; source .env.staging-worker` split the URL at `&`, left `DATABASE_URL` unset for the current shell, and the worker fell back to the local `.env` database. It consumed the tasks but found no attachments (returned 0).
+- Fix: `make staging-worker` runs `scripts/run_staging_worker.sh`, which uses `dotenv -f .env.staging-worker run -- ...` and parses the full URL safely. The example env file now quotes all secret URLs. The local `.env` is kept on local Docker (`localhost:5432`, Redis `6380`); `.env.staging-worker` is only for Neon + Upstash.
+- After the fix, the real staging smoke test (`https://api-investi-flow-staging.onrender.com`) passed: 5 chunks (similarities 0.655/0.629/0.602/0.600/0.589), grounded chat answer citing the document, and a suggestion. Cleanup archived + hard-deleted the test project (204/204).
+- The first staging `register` hit `SSL connection has been closed unexpectedly` after an idle Neon connection; `app/database.py` now uses `pool_pre_ping=True, pool_recycle=300` so API and worker reconnect. The staging API must be redeployed to pick this up.

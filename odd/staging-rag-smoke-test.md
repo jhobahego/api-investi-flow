@@ -46,15 +46,18 @@ El archivo `.env.staging-worker` está gitignored. No commitear secretos.
 ## 2. Arrancar el worker
 
 ```bash
-set -a
-source .env.staging-worker
-set +a
-
-make worker
-# Equivalente:
-# .venv/bin/celery -A app.core.celery_app.celery_app worker \
-#   --loglevel=info --concurrency=1 -Q rag
+make staging-worker
 ```
+
+Equivale a:
+
+```bash
+.venv/bin/dotenv -f .env.staging-worker run -- \
+  .venv/bin/celery -A app.core.celery_app.celery_app worker \
+  --loglevel=info --concurrency=1 -Q rag
+```
+
+No uses `set -a; source .env.staging-worker` si `DATABASE_URL` tiene `&` sin comillas: el shell corta la URL y el worker arranca con la DB local (índice en 0). El archivo de ejemplo ya trae las URLs entre comillas, y `make staging-worker` usa `dotenv` para evitar ese problema.
 
 Dejar la terminal abierta. Mientras el worker esté apagado, los tasks quedan encolados en
 Upstash y se procesan al arrancar.
@@ -111,7 +114,7 @@ API_BASE_URL=https://<staging>.onrender.com CLEANUP=1 \
 8. `suggestion: model=gemini-...` y una continuación académica.
 9. `SMOKE TEST OK`
 
-Resultado observado en la prueba local (API local + worker contra Upstash, DB local):
+Resultado observado en la prueba local (API local + worker contra Upstash, DB local) y en la prueba real de staging:
 
 - 5 chunks para el DOCX, similitudes `0.655`, `0.629`, `0.602`, `0.600`, `0.589`.
 - Chat `gemini-2.5-flash-lite` respondiendo con el resumen del planteamiento y citando
@@ -128,6 +131,8 @@ Resultado observado en la prueba local (API local + worker contra Upstash, DB lo
 | `login falló` 401 | Usuario existe con otra password | Cambiar `TEST_EMAIL` o `TEST_PASSWORD` |
 | `search 404` | API sin la rama RAG | Redeployar staging con `feat/rag-documents-backend` |
 | `Sin chunks después de 90s` | Worker apagado, broker distinto o `RAG_INDEXING_ENABLED=false` | Revisar logs del worker y que las `CELERY_*` de la API y el worker sean iguales |
+| Worker procesa pero `0 fragmentos` | `DATABASE_URL` no exportada (URL con `&` sin comillas) o DB local | Usar `make staging-worker`; confirmar que el worker use Neon y no `localhost` |
+| `SSL connection has been closed unexpectedly` al registrar | Conexión idle de Neon/pgbouncer | Redesplegar la API con `pool_pre_ping=True`; reintentar el smoke test |
 | `A rediss:// URL must have parameter ssl_cert_reqs` | Celery no tiene política TLS | Actualizar `app/core/celery_app.py` (ya configura `ssl_cert_reqs`) o agregar `?ssl_cert_reqs=required` a la URL |
 | `401` intermitente en el polling | `ACCESS_TOKEN_EXPIRE_MINUTES=1` en local | El script re-loguea solo; en staging usar 15–30 minutos |
 | `chat 500` / `suggestion 500` | `GOOGLE_AI_API_KEY` inválida, cuota o modelo no disponible | Revisar la key y `AI_MODEL_EMBEDDING`/modelos de chat |

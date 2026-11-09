@@ -204,7 +204,7 @@ Variables nuevas en `.env.example`: `RATE_LIMIT_REDIS_URL`, `RATE_LIMIT_ENABLED`
 
 > **Plan free de Render**: los Background Workers son de pago. Alternativas gratuitas: (a) correr el worker dentro del mismo Web Service free (dos procesos con un supervisor), (b) usar una VM free de Fly.io u Oracle Cloud Always Free, o (c) dejar el worker en local para desarrollo. Con Upstash free los tasks quedan encolados aunque el worker esté dormido y se procesan al despertar; el plan free de Upstash tiene una sola base y solo `db 0`, así que Celery y el cost guard comparten esa base y su cuota (las claves no colisionan).
 
-**Staging con worker local**: dejá la API en Render con `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` apuntando a Upstash y corré el worker en tu máquina con un `.env.staging-worker` que apunte `DATABASE_URL` a Neon staging, `CELERY_*` a Upstash, `GOOGLE_AI_API_KEY` al proyecto y `RAG_INDEXING_ENABLED=true`. El worker local no necesita `uploads/` porque la API manda el texto extraído en el payload. Mientras tu máquina esté apagada, los tasks quedan en Upstash.
+**Staging con worker local**: dejá la API en Render con `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` apuntando a Upstash y corré `make staging-worker` en tu máquina con un `.env.staging-worker` que apunte `DATABASE_URL` a Neon staging, `CELERY_*` a Upstash, `GOOGLE_AI_API_KEY` al proyecto y `RAG_INDEXING_ENABLED=true`. Usá `dotenv` (lo hace el target) para que el `&` del `DATABASE_URL` de Neon no rompa el export. El worker local no necesita `uploads/` porque la API manda el texto extraído en el payload.
 
 **Producción free**: Oracle Cloud Always Free (VM ARM) o Fly.io (VM chica) corriendo el mismo comando de worker. Solo necesita salida HTTPS a Neon, Upstash y Google; no abras puertos de entrada más allá de SSH.
 
@@ -216,8 +216,7 @@ Runbook completo: `odd/staging-rag-smoke-test.md`. Resumen:
 
 ```bash
 cp .env.staging-worker.example .env.staging-worker   # completar Neon/Upstash/Google
-set -a; source .env.staging-worker; set +a
-make worker                                           # terminal 1
+make staging-worker                                   # terminal 1 (usa dotenv)
 
 API_BASE_URL=https://<staging>.onrender.com \
   make staging-smoke                                  # terminal 2
