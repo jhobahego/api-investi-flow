@@ -210,6 +210,24 @@ Variables nuevas en `.env.example`: `RATE_LIMIT_REDIS_URL`, `RATE_LIMIT_ENABLED`
 
 **Futuro**: mover `extract_text` y `retrieve_context` de los endpoints `async` a `run_in_threadpool` (ver `odd/tasks/rag-documents-backend.md`) para no bloquear el event loop con documentos grandes o embeddings lentos.
 
+### Prueba de staging con worker real
+
+Runbook completo: `odd/staging-rag-smoke-test.md`. Resumen:
+
+```bash
+cp .env.staging-worker.example .env.staging-worker   # completar Neon/Upstash/Google
+set -a; source .env.staging-worker; set +a
+make worker                                           # terminal 1
+
+API_BASE_URL=https://<staging>.onrender.com \
+  make staging-smoke                                  # terminal 2
+```
+
+El script `scripts/staging_rag_smoke_test.py` crea usuario/proyecto, sube
+`Planteamiento del problema.docx`, espera la indexación, prueba
+`/documentos/{id}/search`, el chat con RAG y las sugerencias. Con `CLEANUP=1`
+borra el proyecto al final.
+
 ## 🏗️ Arquitectura
 
 **Arquitectura en 4 Capas** (API → Services → Repositories → Models):

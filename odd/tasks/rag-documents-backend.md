@@ -179,3 +179,14 @@ User requested RAG viability assessment and implementation roadmap. The current 
   )
   ```
   Do not share the request's SQLAlchemy `Session` across threads. For DB work inside the thread, open a fresh `SessionLocal()` and close it in `finally`, or split the work: run only the embedding/HTTP call in the thread and keep DB access in the request thread. The Celery worker path does not need this change.
+
+### Live staging-like smoke test (2026-11-09)
+
+- API local + worker Celery local conectado al **Upstash real** (misma base que la API) + Postgres local con pgvector.
+- Documento `Planteamiento del problema.docx` (7.684 bytes, 3.818 caracteres): 5 chunks, similitudes `0.655`, `0.629`, `0.602`, `0.600`, `0.589`.
+- Chat `gemini-2.5-flash-lite` respondió citando el documento; sugerencias devolvieron una continuación académica.
+- Hallazgos operativos corregidos:
+  - Celery exige `ssl_cert_reqs` para `rediss://`; `app/core/celery_app.py` ahora configura `broker_use_ssl`/`redis_backend_use_ssl` cuando el esquema es TLS.
+  - API y worker deben usar el **mismo** broker; en la prueba la API apuntaba a Upstash y el worker a Redis local, por eso no se procesaban los tasks.
+  - El token local expira en 1 minuto (`ACCESS_TOKEN_EXPIRE_MINUTES=1`); el smoke test re-loguea una vez ante 401.
+  - El hard delete de proyectos exige archivarlos primero; el smoke test hace archive + permanent.
