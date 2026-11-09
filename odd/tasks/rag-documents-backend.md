@@ -1,5 +1,7 @@
 # Feature: rag-documents-backend — Document RAG with pgvector on Neon
 
+File locator: `odd/tasks/rag-documents-backend.md`
+
 ## Objective
 Implement Retrieval-Augmented Generation (RAG) using pgvector on the existing Neon PostgreSQL database to chunk, embed, and semantically retrieve document contents for Gemini Chat and AI Suggestions, replacing naïve prompt stuffing and fixing arbitrary disk path access.
 
@@ -41,12 +43,12 @@ User requested RAG viability assessment and implementation roadmap. The current 
   - Injected directly into Gemini Chat / Suggestion system prompt as verified citations, bounded by token budget.
 
 ## Checklist
-- [ ] B1 Alembic migration & ORM model for `document_chunks` with `pgvector` support and SQLite test fallback (TypeDecorator or conditional dialect)
-- [ ] B2 RAG service (`app/services/rag_service.py`): text chunking (500-1000 chars, sliding window) and embedding generation via `google-genai`
-- [ ] B3 Background indexing pipeline hooked into document upload (`attachment_service.py`) and editor save (`documentos.py:PUT /content`) via FastAPI `BackgroundTasks`
-- [ ] B4 Secure semantic retrieval endpoint/method scoping chunks strictly by `project_id` and verified user ownership, deprecating client-supplied `file_path`
-- [ ] B5 Update AI prompts & assistant endpoints (`ai_assistant.py`, `ai_service.py`) to inject top-K retrieved chunks with source metadata into Gemini context
-- [ ] B6 Unit & integration tests for chunking, embedding service, and RAG retrieval
+- [x] B1 Alembic migration & ORM model for `document_chunks` with `pgvector` support and SQLite test fallback (TypeDecorator or conditional dialect)
+- [x] B2 RAG service (`app/services/rag_service.py`): text chunking (500-1000 chars, sliding window) and embedding generation via `google-genai`
+- [x] B3 Background indexing pipeline hooked into document upload (`attachment_service.py`) and editor save (`documentos.py:PUT /content`) via a Celery worker over Redis (originally planned as FastAPI `BackgroundTasks`)
+- [x] B4 Secure semantic retrieval endpoint/method scoping chunks strictly by `project_id` and verified user ownership, deprecating client-supplied `file_path`
+- [x] B5 Update AI prompts & assistant endpoints (`ai_assistant.py`, `ai_service.py`) to inject top-K retrieved chunks with source metadata into Gemini context
+- [x] B6 Unit & integration tests for chunking, embedding service, and RAG retrieval
 
 ## Authorized Scope
 - `app/models/document_chunk.py` (new)
@@ -80,3 +82,68 @@ User requested RAG viability assessment and implementation roadmap. The current 
 
 ## Delivery Strategy
 - Strategy: `single-pr` or `feature-branch-chain` (`feat/rag-documents-backend` from `develop`). Estimated ~350-450 lines of code.
+
+## Implementation Notes
+
+- Alembic revision: `f3a9c1d7b2e4` (`down_revision = "e91e6743c3c1"`), file `alembic/versions/rag_document_chunks_pgvector.py`. On PostgreSQL it runs `CREATE EXTENSION IF NOT EXISTS vector`, creates `embedding Vector(768)` and the HNSW cosine index; on SQLite it uses `TEXT` plus a plain index. `downgrade()` drops indexes/table but keeps the extension.
+- Model: `app/models/document_chunk.py` (`EMBEDDING_DIMENSION = 768`, `EmbeddingType(TypeDecorator)`, `DocumentChunk`), registered in `app/models/__init__.py` and imported in `alembic/env.py`.
+- Service: `app/services/rag_service.py` implements chunking, batched embeddings, indexing/re-indexing, project resolution, pgvector retrieval, Python cosine/lexical fallback, `retrieve_for_attachment` ownership checks and prompt formatting.
+- Embeddings: `AI_MODEL_EMBEDDING` (default `gemini-embedding-001`) is read from settings inside `_embed_batch`; `DEFAULT_EMBEDDING_MODEL` remains the fallback. `output_dimensionality=768` is kept so the pgvector column stays valid. `text-embedding-004` is retired and returns `404 NOT_FOUND` on `v1beta`; switching models is an env-var-only change.
+- Indexing execution: requests only enqueue. `rag_service.enqueue_attachment_indexing()` calls `index_attachment_task.delay()` and never raises; the Celery task runs `rag_service.index_attachment_in_session()`, which opens its own `SessionLocal`, rolls back and re-raises on failure so Celery retries (max 3, backoff + jitter). `index_attachment_background()` is kept as a harmless compatibility wrapper.
+
+### Extended files (beyond the original Authorized Scope list)
+
+- `app/api/api_v1/endpoints/projects.py`, `phases.py`, `tasks.py`: upload/replace endpoints no longer take `BackgroundTasks`; `attachment_service` enqueues the Celery task after commit.
+- `tests/conftest.py`: sets `RAG_INDEXING_ENABLED=false` before app imports so endpoint tests never enqueue embeddings/DB writes. Also repaired two dormant global fixtures that could not run against the current models: `User` has no `is_superuser` field and `Phase` has no `description` field.
+- `docker-compose.yml`: local Postgres image changed to `pgvector/pgvector:pg16`; added Celery broker/backend env to `api` and a `worker` service running `celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag`.
+- `app/models/__init__.py`, `alembic/env.py`: register the new model.
+- `requirements.txt`: add `pgvector>=0.2.4` (alphabetical, after `pathspec`).
+- `app/core/gemini_guard.py`: add `RAG_CONTEXT_MAX_CHARS = 8000` and document it.
+- `app/core/ai_prompts.py`: add the `FRAGMENTOS RECUPERADOS DEL DOCUMENTO (RAG)` section/instructions while keeping existing placeholders.
+- `app/services/ai_service.py`: `chat()` and `suggest_text()` accept `rag_context`, truncate it and pass it into the prompt.
+- `app/api/api_v1/endpoints/ai_assistant.py`: removed all client `attachment_document`/`file_path` reads and filesystem extraction; phases/tasks summaries now come from request context or DB metadata only; RAG retrieval is injected into chat and suggestions.
+- `app/api/api_v1/documentos.py`: enqueues re-indexing after `PUT /content` and adds authenticated `GET /documentos/{attachment_id}/search`.
+- `app/core/celery_app.py` (new): Celery app `investi_flow` with `include=["app.tasks.rag_tasks"]`, JSON serializers, UTF/UTC, `task_acks_late`, prefetch 1 and default queue `rag`.
+- `app/tasks/rag_tasks.py` (new): `rag.index_attachment` task (bound, autoretry on `Exception`, exponential backoff + jitter, max 3). `app/tasks/__init__.py` is empty.
+- `app/core/config.py` / `.env.example`: `AI_MODEL_EMBEDDING`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`.
+
+### Celery + Redis indexing
+
+- Broker/backend: `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND`, falling back to `REDIS_URL` and then `redis://localhost:6379/0`.
+- HTTP requests only enqueue via `rag_service.enqueue_attachment_indexing()`; enqueue failures are logged and never fail the request. The worker consumes queue `rag`; the task name is `rag.index_attachment`.
+- `RAG_INDEXING_ENABLED=false` disables enqueueing (used by endpoint tests through `tests/conftest.py`).
+
+### Data state
+
+- No backfill for existing documents: only new uploads, replacements and editor saves enqueue indexing.
+- Production/staging Neon data was wiped with snapshot `snap-autumn-smoke-ac575sux` (`pre-rag-wipe-2026-11-08`, 32,210,944 bytes). All application rows were truncated; `alembic_version` was preserved.
+- Production Neon (`aged-truth-08942612`, branch `br-crimson-art-aczv0a11`, `neondb`) applied the equivalent migration DDL and was stamped to `f3a9c1d7b2e4`: `vector` extension 0.8.0, `embedding vector(768)`, 6 indexes including the HNSW cosine index, 0 rows in `document_chunks`.
+- Local Postgres (`pgvector/pgvector:pg16`) was migrated with Alembic `upgrade head` to `f3a9c1d7b2e4` and wiped (all application table counts = 0).
+
+### Deployment note (Render)
+
+- Add a Background Worker service using the same image/repo, the same environment (`DATABASE_URL`, `GOOGLE_AI_API_KEY`, `AI_MODEL_EMBEDDING`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`) and start command `celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag`.
+- Staging/production must run `alembic upgrade head` and have Redis reachable; the RAG worker connection is independent from the rate-limit Redis.
+
+### Design decisions / deviations
+
+- `EmbeddingType` is declared as `TypeDecorator[Text]` (type parameter only) so mypy accepts `impl = Text`; behavior matches the specified `TypeDecorator`.
+- A `TypeDecorator` column does not expose pgvector's `cosine_distance()` comparator at runtime (`hasattr(...) == False`). `_retrieve_postgres` therefore uses the equivalent `DocumentChunk.embedding.op("<=>")(literal(query_vector, type_=EmbeddingType()))`; it compiles to `document_chunks.embedding <=> :param` and the bind processor converts the 768-float list to the pgvector literal.
+- Re-indexing test asserts content replacement and stable count instead of asserting old ids disappear, because SQLite reuses deleted rowids when the table is emptied.
+- `delete_attachment_chunks()` deletes and flushes but does not commit; `index_attachment()` performs the single commit for delete + insert.
+- Celery task uses `bind=True` (Celery's actual keyword for a bound task). `bound=True` is not recognized by Celery and would make `self` receive the attachment id.
+- `include=["app.tasks.rag_tasks"]` is intentionally not eagerly imported in `celery_app.py`. A plain `celery_app.tasks` read lists only Celery built-ins; when the worker loader runs (`celery_app.loader.import_default_modules()`) `rag.index_attachment` is registered.
+
+### Verification evidence
+
+- `.venv/bin/black app/ tests/test_rag_service.py` → 79 files unchanged.
+- `.venv/bin/isort app/ tests/test_rag_service.py` → no changes.
+- `.venv/bin/flake8 app/` → clean (no output).
+- `.venv/bin/python -c "from app.core.celery_app import celery_app; print(sorted(celery_app.tasks.keys()))"` → Celery built-ins only (`celery.accumulate`, ..., `celery.starmap`). With `celery_app.loader.import_default_modules()` (what the worker does at startup) the list also contains `rag.index_attachment`.
+- `.venv/bin/mypy app/` → fails **pre-existing/environmental** while parsing `.venv/lib/python3.12/site-packages/deprecated/sphinx.py:35` (`Type statement is only supported in Python 3.12 and greater`) because `mypy.ini` targets Python 3.11. The new Celery import is annotated `# type: ignore[import-untyped]`, and with `--python-version 3.12` only the same 7 pre-existing `gemini_guard.py` errors remain.
+- `.venv/bin/pytest tests/test_rag_service.py -v` → 20 passed (includes the Postgres distance-expression regression test).
+- `.venv/bin/pytest tests/test_api/test_ai_assistant.py tests/test_api/test_attachments.py tests/test_services/test_ai_service.py -v` → 89 passed.
+- Full suite `.venv/bin/pytest -q` → 546 passed (run before the final Postgres distance fix; the fix only touches the Postgres branch plus a new test).
+- Live local E2E: Redis (docker) + Celery worker (`queue=rag`) + local Postgres with pgvector + real Google API. A DOCX was seeded, `enqueue_attachment_indexing()` returned `True`, the worker logged `Task rag.index_attachment ... succeeded`, 1 chunk was stored with `vector_dims = 768`, and `retrieve_context()` returned similarity `0.7513` for `rag-e2e.docx`. `retrieve_for_attachment()` with a non-owner user returned HTTP 403.
+- Live Google model check: `text-embedding-004` returns `404 NOT_FOUND` on `v1beta`; `gemini-embedding-001` with `output_dimensionality=768` returns 768 dims. The default was changed to `gemini-embedding-001` and remains overridable via `AI_MODEL_EMBEDDING`.
+- Regression found and fixed during E2E: the `<=>` scalar inherited the `Vector` column type, so pgvector tried to parse a float as a vector. `_distance_expression()` now uses `return_type=Float()`; the test asserts the compiled PG expression type.
