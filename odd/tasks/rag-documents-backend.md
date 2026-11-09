@@ -128,6 +128,14 @@ User requested RAG viability assessment and implementation roadmap. The current 
 - Staging/production must run `alembic upgrade head` and have Redis reachable; the RAG worker connection is independent from the rate-limit Redis.
 - The default pipeline sends the extracted text in the task payload (`rag.index_attachment_text`), so the API and worker do **not** need a shared disk. The file-based `rag.index_attachment` fallback (text over 1 MB or extraction failure) still needs `UPLOAD_FOLDER` shared between services. Object storage is recommended for durability and re-indexing.
 
+### Worker deployment alternatives
+
+- **Staging: local worker.** Keep the API deployed on Render with the same Upstash `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND`, and run the worker on the developer machine with a `.env.staging-worker` that points `DATABASE_URL` to the staging Neon branch, `CELERY_*` to Upstash, `GOOGLE_AI_API_KEY` to the project key, `AI_MODEL_EMBEDDING=gemini-embedding-001` and `RAG_INDEXING_ENABLED=true`. Tasks remain queued in Upstash while the local worker is offline. No shared disk is needed because the default path sends the extracted text in the payload.
+- **Production free: Oracle Cloud Always Free or Fly.io.** Run the same worker command on a small VM:
+  `celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag`
+  with the production `DATABASE_URL`, Upstash `CELERY_*`, `GOOGLE_AI_API_KEY` and `AI_MODEL_EMBEDDING`. Only outbound HTTPS is required (Neon, Upstash, Google); no inbound ports beyond SSH.
+- **Render:** Background Workers are paid. The free fallback is to run the worker in the same free Web Service as the API (shares the disk, but the service sleeps) or to use one of the VM options above.
+
 ### Post-verification corrections (independent verifier)
 
 - `/documentos/{id}/search` was returning sibling attachment chunks: `retrieve_context()` now accepts an optional `attachment_id` and filters the PostgreSQL, Python and lexical paths; `retrieve_for_attachment()` passes it. A new test covers a project attachment plus a phase attachment in the same project.
@@ -152,9 +160,22 @@ User requested RAG viability assessment and implementation roadmap. The current 
 - `.venv/bin/flake8 app/` → clean (no output).
 - `.venv/bin/pytest tests/test_rag_service.py -q` → 27 passed (adds text-payload enqueue, extraction-failure fallback, and `index_attachment_text` persistence).
 - `.venv/bin/pytest tests/test_api/test_ai_assistant.py tests/test_api/test_attachments.py tests/test_services/test_ai_service.py -q` → 89 passed.
-- `.venv/bin/python -c "from app.core.celery_app import celery_app; print(sorted(celery_app.tasks.keys()))"` → Celery built-ins only (`celery.accumulate`, ..., `celery.starmap`). With `celery_app.loader.import_default_modules()` (what the worker does at startup) the list also contains `rag.index_attachment`.
+- `.venv/bin/python -c "from app.core.celery_app import celery_app; print(sorted(celery_app.tasks.keys()))"` → Celery built-ins only (`celery.accumulate`, ..., `celery.starmap`). With `celery_app.loader.import_default_modules()` (what the worker does at startup) the list also contains `rag.index_attachment` and `rag.index_attachment_text`.
 - `.venv/bin/mypy app/` → fails **pre-existing/environmental** while parsing `.venv/lib/python3.12/site-packages/deprecated/sphinx.py:35` (`Type statement is only supported in Python 3.12 and greater`) because `mypy.ini` targets Python 3.11. The new Celery import is annotated `# type: ignore[import-untyped]`, and with `--python-version 3.12` only the same 7 pre-existing `gemini_guard.py` errors remain.
-- Full suite `.venv/bin/pytest -q` → 546 passed (run before the final Postgres distance fix; the fix only touches the Postgres branch plus a new test).
+- Full suite `.venv/bin/pytest -q` → **551 passed** (run before the text-payload change; the 27 RAG + 89 targeted suites passed after it).
 - Live local E2E: Redis (docker) + Celery worker (`queue=rag`) + local Postgres with pgvector + real Google API. A DOCX was seeded, `enqueue_attachment_indexing()` returned `True`, the worker logged `Task rag.index_attachment ... succeeded`, 1 chunk was stored with `vector_dims = 768`, and `retrieve_context()` / `retrieve_for_attachment()` returned the chunk (similarity `0.723` after the correction; `0.7513` in the first run). `retrieve_for_attachment()` with a non-owner user returned HTTP 403.
 - Live Google model check: `text-embedding-004` returns `404 NOT_FOUND` on `v1beta`; `gemini-embedding-001` with `output_dimensionality=768` returns 768 dims. The default was changed to `gemini-embedding-001` and remains overridable via `AI_MODEL_EMBEDDING`.
 - Regression found and fixed during E2E: the `<=>` scalar inherited the `Vector` column type, so pgvector tried to parse a float as a vector. `_distance_expression()` now uses `return_type=Float()`; the test asserts the compiled PG expression type.
+
+### Future improvements
+
+- **Move API-side extraction/retrieval to `run_in_threadpool`.** `extract_text` (DOCX/PDF) and `retrieve_context` are synchronous and currently run inside `async` endpoints. For large documents or slow embedding calls, wrap them with `fastapi.concurrency.run_in_threadpool` (or `anyio.to_thread.run_sync`):
+  ```python
+  from fastapi.concurrency import run_in_threadpool
+
+  text = await run_in_threadpool(rag_service.extract_text, attachment)
+  results = await run_in_threadpool(
+      rag_service.retrieve_context, db, project_id, query
+  )
+  ```
+  Do not share the request's SQLAlchemy `Session` across threads. For DB work inside the thread, open a fresh `SessionLocal()` and close it in `finally`, or split the work: run only the embedding/HTTP call in the thread and keep DB access in the request thread. The Celery worker path does not need this change.

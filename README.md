@@ -202,7 +202,13 @@ Variables nuevas en `.env.example`: `RATE_LIMIT_REDIS_URL`, `RATE_LIMIT_ENABLED`
 5. **Almacenamiento**: el pipeline por defecto extrae el texto en la API y lo envía en el payload de Celery (`rag.index_attachment_text`), por lo que el worker **no necesita** acceder a `uploads/` ni compartir disco con la API. Si el texto supera 1 MB (`MAX_TASK_TEXT_CHARS`), la extracción falla o queda vacía, se cae a la tarea basada en archivo (`rag.index_attachment`), que sí requiere un disco compartido. Aun así se recomienda object storage (S3/R2) para durabilidad y reindexado.
 6. Aplicar la migración en la base de producción/staging: `alembic upgrade head` (la revisión `f3a9c1d7b2e4` crea `document_chunks` y la extensión `vector`).
 
-> **Plan free de Render**: los Background Workers son de pago. Alternativas gratuitas: (a) correr el worker dentro del mismo Web Service free (dos procesos con un supervisor), (b) usar una VM free de Fly.io u Oracle Cloud Always Free, o (c) dejar el worker en local para desarrollo. Con Upstash free los tasks quedan encolados aunque el worker esté dormido y se procesan al despertar; el plan free de Upstash tiene una sola base y solo `db 0`, así que Celery y el cost guard comparten cuota.
+> **Plan free de Render**: los Background Workers son de pago. Alternativas gratuitas: (a) correr el worker dentro del mismo Web Service free (dos procesos con un supervisor), (b) usar una VM free de Fly.io u Oracle Cloud Always Free, o (c) dejar el worker en local para desarrollo. Con Upstash free los tasks quedan encolados aunque el worker esté dormido y se procesan al despertar; el plan free de Upstash tiene una sola base y solo `db 0`, así que Celery y el cost guard comparten esa base y su cuota (las claves no colisionan).
+
+**Staging con worker local**: dejá la API en Render con `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` apuntando a Upstash y corré el worker en tu máquina con un `.env.staging-worker` que apunte `DATABASE_URL` a Neon staging, `CELERY_*` a Upstash, `GOOGLE_AI_API_KEY` al proyecto y `RAG_INDEXING_ENABLED=true`. El worker local no necesita `uploads/` porque la API manda el texto extraído en el payload. Mientras tu máquina esté apagada, los tasks quedan en Upstash.
+
+**Producción free**: Oracle Cloud Always Free (VM ARM) o Fly.io (VM chica) corriendo el mismo comando de worker. Solo necesita salida HTTPS a Neon, Upstash y Google; no abras puertos de entrada más allá de SSH.
+
+**Futuro**: mover `extract_text` y `retrieve_context` de los endpoints `async` a `run_in_threadpool` (ver `odd/tasks/rag-documents-backend.md`) para no bloquear el event loop con documentos grandes o embeddings lentos.
 
 ## 🏗️ Arquitectura
 
