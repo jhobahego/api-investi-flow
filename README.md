@@ -77,7 +77,7 @@ Verificado en `develop` / `main` a la altura del merge PR #32:
 | Tema | Qué hay hoy |
 |------|-------------|
 | Almacenamiento | `document_chunks` con `pgvector` (`vector(768)`) en Neon; `EmbeddingType` cae a TEXT/JSON en SQLite para los tests |
-| Indexado | Celery + Redis (`app/core/celery_app.py`, `app/tasks/rag_tasks.py`); los endpoints encolan `rag.index_attachment` y no bloquean el request |
+| Indexado | Celery + Redis (`app/core/celery_app.py`, `app/tasks/rag_tasks.py`); los endpoints extraen el texto y encolan `rag.index_attachment_text` con el texto en el payload, sin bloquear el request |
 | Embeddings | `gemini-embedding-001` por defecto, configurable con `AI_MODEL_EMBEDDING`; `output_dimensionality=768` |
 | Retrieval | Coseno con pgvector en PostgreSQL y fallback Python/léxico en SQLite; scoped por `project_id` y `attachment_id` |
 | Seguridad | Se eliminó la lectura de `file_path` enviado por el cliente; el ownership se valida antes de recuperar fragmentos |
@@ -199,8 +199,10 @@ Variables nuevas en `.env.example`: `RATE_LIMIT_REDIS_URL`, `RATE_LIMIT_ENABLED`
    - `RAG_INDEXING_ENABLED=true`
    - `AI_MODEL_EMBEDDING=gemini-embedding-001`
    - `GOOGLE_AI_API_KEY`, `DATABASE_URL`, `SECRET_KEY` (las mismas de la API).
-5. **Almacenamiento**: los discos persistentes de Render se adjuntan a un único servicio y **no se comparten** entre API y worker. Para producción, guardar los `uploads` en object storage (S3/R2) o ejecutar el worker dentro del mismo servicio. Sin almacenamiento compartido, el worker no ve los archivos y no indexa.
+5. **Almacenamiento**: el pipeline por defecto extrae el texto en la API y lo envía en el payload de Celery (`rag.index_attachment_text`), por lo que el worker **no necesita** acceder a `uploads/` ni compartir disco con la API. Si el texto supera 1 MB (`MAX_TASK_TEXT_CHARS`), la extracción falla o queda vacía, se cae a la tarea basada en archivo (`rag.index_attachment`), que sí requiere un disco compartido. Aun así se recomienda object storage (S3/R2) para durabilidad y reindexado.
 6. Aplicar la migración en la base de producción/staging: `alembic upgrade head` (la revisión `f3a9c1d7b2e4` crea `document_chunks` y la extensión `vector`).
+
+> **Plan free de Render**: los Background Workers son de pago. Alternativas gratuitas: (a) correr el worker dentro del mismo Web Service free (dos procesos con un supervisor), (b) usar una VM free de Fly.io u Oracle Cloud Always Free, o (c) dejar el worker en local para desarrollo. Con Upstash free los tasks quedan encolados aunque el worker esté dormido y se procesan al despertar; el plan free de Upstash tiene una sola base y solo `db 0`, así que Celery y el cost guard comparten cuota.
 
 ## 🏗️ Arquitectura
 
@@ -219,7 +221,7 @@ Capas transversales: `app/core/` (config, seguridad, `gemini_guard`, prompts IA)
 - **Endpoints**: 58 decoradores `@router` en `app/` + `GET /` y `GET /health` en `main.py`
 - **Modelos**: 10 modelos relacionales (User, Project, Phase, Task, Attachment, Document, DocumentChunk, Bibliography, Conversation, Collaboration)
 - **Migraciones**: 9 revisiones Alembic en `alembic/versions/` (incluye `deleted_at`, bibliografías y `document_chunks` con pgvector)
-- **Tests**: 32 archivos en `tests/`; **551 tests ejecutados** en la última corrida local (incluye 24 tests RAG en `tests/test_rag_service.py`; unitarios, API, servicios e integración)
+- **Tests**: 32 archivos en `tests/`; **551 tests ejecutados** en la última corrida local (incluye 27 tests RAG en `tests/test_rag_service.py`; unitarios, API, servicios e integración)
 - **Cobertura**: pendiente de reporte en este corte (sin número verificado; no se afirma el >85% anterior)
 
 ## 🤝 Contribuir
@@ -236,4 +238,4 @@ Capas transversales: `app/core/` (config, seguridad, `gemini_guard`, prompts IA)
 
 **📅 Última actualización**: 9 de noviembre de 2026
 **🚀 Estado**: `develop` con Sprints 1–3, Fase 1 del cost guard de Gemini y archivado de proyectos mergeados (PR #32, `226b520`). La rama `feat/rag-documents-backend` agrega RAG de documentos con pgvector + Celery/Redis y está pendiente de PR/merge.
-**🎯 Próximo hito**: Configurar el worker Celery y el almacenamiento compartido en Render, y luego abrir el PR de la rama RAG. Exportación a PDF/bibliografía sigue pospuesta (TBD).
+**🎯 Próximo hito**: Configurar el worker Celery en Render, evaluar object storage para durabilidad/reindexado, y luego abrir el PR de la rama RAG. Exportación a PDF/bibliografía sigue pospuesta (TBD).

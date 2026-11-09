@@ -25,3 +25,23 @@ def index_attachment_task(self: Any, attachment_id: int) -> int:
         chunk_count,
     )
     return chunk_count
+
+
+@celery_app.task(
+    name="rag.index_attachment_text",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
+def index_attachment_text_task(self: Any, attachment_id: int, text: str) -> int:
+    """Index pre-extracted text sent by the API. Exceptions propagate."""
+    logger.info("Indexado RAG (texto) iniciado para adjunto %s", attachment_id)
+    chunk_count = rag_service.index_attachment_text_in_session(attachment_id, text)
+    logger.info(
+        "Indexado RAG (texto) finalizado para adjunto %s (%s fragmentos)",
+        attachment_id,
+        chunk_count,
+    )
+    return chunk_count

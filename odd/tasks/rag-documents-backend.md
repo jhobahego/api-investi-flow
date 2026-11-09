@@ -110,7 +110,9 @@ User requested RAG viability assessment and implementation roadmap. The current 
 ### Celery + Redis indexing
 
 - Broker/backend: `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND`, falling back to `REDIS_URL` and then `redis://localhost:6379/0`.
-- HTTP requests only enqueue via `rag_service.enqueue_attachment_indexing()`; enqueue failures are logged and never fail the request. The worker consumes queue `rag`; the task name is `rag.index_attachment`.
+- HTTP requests extract the document text in the API and enqueue `rag.index_attachment_text` with `(attachment_id, text)`; the worker does not read `uploads/`. Enqueue failures are logged and never fail the request.
+- `rag.index_attachment` (file-based) remains as a fallback when extraction fails/returns empty, or when the text exceeds `MAX_TASK_TEXT_CHARS` (1,000,000 characters); that fallback requires a shared disk.
+- The worker consumes queue `rag`; task names are `rag.index_attachment_text` (default) and `rag.index_attachment` (fallback).
 - `RAG_INDEXING_ENABLED=false` disables enqueueing (used by endpoint tests through `tests/conftest.py`).
 
 ### Data state
@@ -124,7 +126,7 @@ User requested RAG viability assessment and implementation roadmap. The current 
 
 - Add a Background Worker service using the same image/repo, the same environment (`DATABASE_URL`, `GOOGLE_AI_API_KEY`, `AI_MODEL_EMBEDDING`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`) and start command `celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag`.
 - Staging/production must run `alembic upgrade head` and have Redis reachable; the RAG worker connection is independent from the rate-limit Redis.
-- The API and the worker are separate processes/services: the worker reads `attachment.file_path` from its own filesystem. On Render, mount a shared disk/volume at `UPLOAD_FOLDER` for both services, or move uploads to object storage. Otherwise the worker will find no files and index zero chunks.
+- The default pipeline sends the extracted text in the task payload (`rag.index_attachment_text`), so the API and worker do **not** need a shared disk. The file-based `rag.index_attachment` fallback (text over 1 MB or extraction failure) still needs `UPLOAD_FOLDER` shared between services. Object storage is recommended for durability and re-indexing.
 
 ### Post-verification corrections (independent verifier)
 
@@ -145,13 +147,13 @@ User requested RAG viability assessment and implementation roadmap. The current 
 
 ### Verification evidence
 
-- `.venv/bin/black app/ tests/test_rag_service.py` → 79 files unchanged.
+- `.venv/bin/black app/ tests/test_rag_service.py` → 1 file reformatted on the first pass; idempotent afterwards (79 files checked).
 - `.venv/bin/isort app/ tests/test_rag_service.py` → no changes.
 - `.venv/bin/flake8 app/` → clean (no output).
+- `.venv/bin/pytest tests/test_rag_service.py -q` → 27 passed (adds text-payload enqueue, extraction-failure fallback, and `index_attachment_text` persistence).
+- `.venv/bin/pytest tests/test_api/test_ai_assistant.py tests/test_api/test_attachments.py tests/test_services/test_ai_service.py -q` → 89 passed.
 - `.venv/bin/python -c "from app.core.celery_app import celery_app; print(sorted(celery_app.tasks.keys()))"` → Celery built-ins only (`celery.accumulate`, ..., `celery.starmap`). With `celery_app.loader.import_default_modules()` (what the worker does at startup) the list also contains `rag.index_attachment`.
 - `.venv/bin/mypy app/` → fails **pre-existing/environmental** while parsing `.venv/lib/python3.12/site-packages/deprecated/sphinx.py:35` (`Type statement is only supported in Python 3.12 and greater`) because `mypy.ini` targets Python 3.11. The new Celery import is annotated `# type: ignore[import-untyped]`, and with `--python-version 3.12` only the same 7 pre-existing `gemini_guard.py` errors remain.
-- `.venv/bin/pytest tests/test_rag_service.py -v` → 24 passed (Postgres distance regression, sibling-attachment scoping, NULL-embedding fallback, extraction-failure preservation, PDF error rejection).
-- `.venv/bin/pytest tests/test_rag_service.py tests/test_api/test_ai_assistant.py tests/test_api/test_attachments.py tests/test_services/test_ai_service.py -v` → 113 passed.
 - Full suite `.venv/bin/pytest -q` → 546 passed (run before the final Postgres distance fix; the fix only touches the Postgres branch plus a new test).
 - Live local E2E: Redis (docker) + Celery worker (`queue=rag`) + local Postgres with pgvector + real Google API. A DOCX was seeded, `enqueue_attachment_indexing()` returned `True`, the worker logged `Task rag.index_attachment ... succeeded`, 1 chunk was stored with `vector_dims = 768`, and `retrieve_context()` / `retrieve_for_attachment()` returned the chunk (similarity `0.723` after the correction; `0.7513` in the first run). `retrieve_for_attachment()` with a non-owner user returned HTTP 403.
 - Live Google model check: `text-embedding-004` returns `404 NOT_FOUND` on `v1beta`; `gemini-embedding-001` with `output_dimensionality=768` returns 768 dims. The default was changed to `gemini-embedding-001` and remains overridable via `AI_MODEL_EMBEDDING`.

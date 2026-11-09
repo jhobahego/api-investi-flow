@@ -1,5 +1,6 @@
 """Tests for the document RAG service (chunking, embeddings, retrieval)."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -239,6 +240,81 @@ def test_index_attachment_in_session(db_session, test_project, monkeypatch):
     assert count > 0
     rows = db_session.query(DocumentChunk).filter_by(attachment_id=attachment.id).all()
     assert len(rows) == count
+
+
+def test_enqueue_text_indexing_enqueues_extracted_text(monkeypatch):
+    monkeypatch.setenv("RAG_INDEXING_ENABLED", "true")
+    attachment = Attachment(
+        id=123,
+        file_name="texto.docx",
+        file_path="/tmp/texto.docx",
+        file_type=FileType.DOCX,
+        file_size=10,
+    )
+    monkeypatch.setattr(
+        rag_service, "extract_text", lambda _attachment: "texto extraido"
+    )
+
+    from app.tasks import rag_tasks
+
+    captured: dict[str, tuple[int, str]] = {}
+
+    def _delay(attachment_id: int, text: str) -> None:
+        captured["args"] = (attachment_id, text)
+
+    monkeypatch.setattr(rag_tasks.index_attachment_text_task, "delay", _delay)
+
+    assert rag_service.enqueue_attachment_text_indexing(attachment) is True
+    assert captured["args"] == (attachment.id, "texto extraido")
+
+
+def test_enqueue_text_indexing_falls_back_when_extraction_fails(monkeypatch, caplog):
+    monkeypatch.setenv("RAG_INDEXING_ENABLED", "true")
+    attachment = Attachment(
+        id=7,
+        file_name="roto.docx",
+        file_path="/tmp/roto.docx",
+        file_type=FileType.DOCX,
+        file_size=10,
+    )
+
+    def _fail(_attachment):
+        raise RAGServiceError("extract failed")
+
+    monkeypatch.setattr(rag_service, "extract_text", _fail)
+    monkeypatch.setattr(
+        rag_service, "enqueue_attachment_indexing", lambda _attachment_id: False
+    )
+
+    with caplog.at_level(logging.ERROR):
+        result = rag_service.enqueue_attachment_text_indexing(attachment)
+
+    assert result is False
+    assert "No se pudo encolar" in caplog.text
+
+
+def test_index_attachment_text_persists_chunks(db_session, test_project, monkeypatch):
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    monkeypatch.setattr(
+        rag_service,
+        "embed_texts",
+        lambda texts: [[0.1] * EMBEDDING_DIMENSION for _ in texts],
+    )
+
+    count = rag_service.index_attachment_text(
+        db_session, attachment, "contenido " * 300
+    )
+
+    assert count > 0
+    rows = (
+        db_session.query(DocumentChunk)
+        .filter_by(attachment_id=attachment.id)
+        .order_by(DocumentChunk.chunk_index)
+        .all()
+    )
+    assert len(rows) == count
+    assert [row.chunk_index for row in rows] == list(range(count))
+    assert all(row.project_id == test_project.id for row in rows)
 
 
 # -------------------------------------------------------------------- retrieval

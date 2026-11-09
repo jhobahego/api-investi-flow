@@ -33,6 +33,7 @@ DEFAULT_CHUNK_SIZE = 900
 DEFAULT_CHUNK_OVERLAP = 120
 DEFAULT_TOP_K = 5
 MAX_EMBED_BATCH = 50
+MAX_TASK_TEXT_CHARS = 1_000_000
 RAG_CONTEXT_MAX_CHARS = 8000
 DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
 
@@ -282,7 +283,18 @@ class RAGService:
 
     # --------------------------------------------------------------- indexing
     def index_attachment(self, db: Session, attachment: Attachment) -> int:
-        """Chunk, embed and persist an attachment's text. Returns chunk count."""
+        """Extract text from the file and index it. Returns chunk count."""
+        text = self.extract_text(attachment)
+        return self._index_text(db, attachment, text)
+
+    def index_attachment_text(
+        self, db: Session, attachment: Attachment, text: str
+    ) -> int:
+        """Index already-extracted text without touching the filesystem."""
+        return self._index_text(db, attachment, text)
+
+    def _index_text(self, db: Session, attachment: Attachment, text: str) -> int:
+        """Chunk, embed and persist text. Returns chunk count."""
         project_id = self.resolve_project_id(db, attachment)
         if project_id is None:
             raise ValueError(
@@ -290,7 +302,6 @@ class RAGService:
                 f"{attachment.id} para indexarlo"
             )
 
-        text = self.extract_text(attachment)
         chunks = self.chunk_text(text)
         if not chunks:
             self.delete_attachment_chunks(db, attachment.id)
@@ -346,6 +357,20 @@ class RAGService:
         finally:
             db.close()
 
+    def index_attachment_text_in_session(self, attachment_id: int, text: str) -> int:
+        """Celery entry point for pre-extracted text; re-raises on failure."""
+        db = SessionLocal()
+        try:
+            attachment = db.get(Attachment, attachment_id)
+            if attachment is None:
+                return 0
+            return self.index_attachment_text(db, attachment, text)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
     def enqueue_attachment_indexing(self, attachment_id: int) -> bool:
         """Enqueue indexing on Celery. Enqueue failures never fail the request."""
         if not self.indexing_enabled():
@@ -360,6 +385,44 @@ class RAGService:
                 "No se pudo encolar el indexado RAG del adjunto %s", attachment_id
             )
             return False
+
+    def enqueue_attachment_text_indexing(self, attachment: Attachment) -> bool:
+        """Extract text in the API and enqueue it with the task payload.
+
+        Sending the text keeps the worker independent from the API's disk. If
+        extraction fails, is empty, or the text is too large, fall back to the
+        file-based task (which requires a shared disk).
+        """
+        if not self.indexing_enabled():
+            return False
+        try:
+            text = self.extract_text(attachment)
+            if not text.strip():
+                logger.warning(
+                    "No hay texto extraído para el adjunto %s; no se indexa",
+                    attachment.id,
+                )
+                return False
+            if len(text) > MAX_TASK_TEXT_CHARS:
+                logger.warning(
+                    "Texto del adjunto %s supera %s caracteres; "
+                    "se usa la tarea basada en archivo",
+                    attachment.id,
+                    MAX_TASK_TEXT_CHARS,
+                )
+                return self.enqueue_attachment_indexing(attachment.id)
+
+            from app.tasks.rag_tasks import index_attachment_text_task
+
+            index_attachment_text_task.delay(attachment.id, text)
+            return True
+        except Exception:
+            logger.exception(
+                "No se pudo encolar el indexado RAG (texto) del adjunto %s; "
+                "se intenta la tarea basada en archivo",
+                attachment.id,
+            )
+            return self.enqueue_attachment_indexing(attachment.id)
 
     def index_attachment_background(self, attachment_id: int) -> None:
         """Background wrapper: never raises, opens its own session."""

@@ -299,7 +299,7 @@ async def update_document_content(
 
     db.commit()
 
-    rag_service.enqueue_attachment_indexing(attachment.id)
+    rag_service.enqueue_attachment_text_indexing(attachment)
 
     return {"message": "Documento actualizado exitosamente"}
 
