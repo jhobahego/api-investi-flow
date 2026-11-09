@@ -8,8 +8,9 @@ ISORT = .venv/bin/isort
 FLAKE8 = .venv/bin/flake8
 MYPY = .venv/bin/mypy
 ALEMBIC = .venv/bin/alembic
+CELERY = .venv/bin/celery
 
-.PHONY: help install dev lint format test clean docker-build docker-up docker-down
+.PHONY: help install dev worker lint format test clean docker-build docker-up docker-down
 
 help: ## Mostrar ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
@@ -19,6 +20,9 @@ install: ## Instalar dependencias
 
 dev: ## Ejecutar en modo desarrollo
 	$(UVICORN) main:app --reload --host 0.0.0.0 --port 8000
+
+worker: ## Ejecutar el worker Celery de indexado RAG
+	$(CELERY) -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag
 
 lint: ## Ejecutar linting (flake8 y mypy)
 	$(FLAKE8) app/
