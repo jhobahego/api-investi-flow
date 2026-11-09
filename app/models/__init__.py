@@ -2,6 +2,7 @@
 from app.models.attachment import Attachment
 from app.models.bibliography import Bibliography
 from app.models.conversation import Conversation, Message
+from app.models.document_chunk import DocumentChunk
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.task import Task
@@ -16,4 +17,5 @@ __all__ = [
     "Bibliography",
     "Conversation",
     "Message",
+    "DocumentChunk",
 ]

@@ -5,6 +5,12 @@ Este archivo contiene fixtures que están disponibles para todos los tests
 sin necesidad de importarlos explícitamente.
 """
 
+import os
+
+# Los tests de endpoints no deben lanzar embeddings ni escrituras de RAG en
+# background. Debe quedar definido antes de importar la app.
+os.environ.setdefault("RAG_INDEXING_ENABLED", "false")
+
 from typing import Generator
 
 import pytest
@@ -61,7 +67,6 @@ def test_user(db_session: Session) -> User:
         hashed_password="hashed_test_password",
         phone_number="+573001234567",
         is_active=True,
-        is_superuser=False,
     )
     db_session.add(user)
     db_session.commit()
@@ -86,7 +91,7 @@ def test_superuser(db_session: Session) -> User:
         hashed_password="hashed_admin_password",
         phone_number="+573009999999",
         is_active=True,
-        is_superuser=True,
+        is_verified=True,
     )
     db_session.add(user)
     db_session.commit()
@@ -134,7 +139,6 @@ def test_phase(db_session: Session, test_project: Project) -> Phase:
     """
     phase = Phase(
         name="Test Phase",
-        description="Test phase description",
         position=0,
         color="#FF5733",
         project_id=test_project.id,
