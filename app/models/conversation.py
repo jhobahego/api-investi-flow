@@ -2,9 +2,9 @@
 Modelos para conversaciones de chat con IA
 """
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -66,6 +66,9 @@ class Message(Base):
     model_used: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True
     )  # Modelo de IA utilizado (solo para mensajes de 'model')
+    sources: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )  # Fuentes RAG citadas (solo para mensajes del asistente)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

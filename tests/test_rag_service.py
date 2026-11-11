@@ -611,6 +611,124 @@ def test_index_attachment_preserves_old_chunks_on_extraction_failure(
     )
 
 
+# ------------------------------------------------- indexing status transitions
+def _bind_session(monkeypatch, db_session) -> None:
+    """Route the service's SessionLocal to the test session."""
+    monkeypatch.setattr("app.services.rag_service.SessionLocal", lambda: db_session)
+    monkeypatch.setattr(db_session, "close", lambda: None)
+
+
+def test_index_attachment_in_session_marks_indexed(
+    db_session, test_project, monkeypatch
+):
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    _bind_session(monkeypatch, db_session)
+    monkeypatch.setattr(rag_service, "index_attachment", lambda _db, _att: 3)
+
+    count = rag_service.index_attachment_in_session(attachment.id)
+
+    assert count == 3
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "indexed"
+
+
+def test_index_attachment_in_session_marks_error_when_no_chunks(
+    db_session, test_project, monkeypatch
+):
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    _bind_session(monkeypatch, db_session)
+    monkeypatch.setattr(rag_service, "index_attachment", lambda _db, _att: 0)
+
+    count = rag_service.index_attachment_in_session(attachment.id)
+
+    assert count == 0
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "error"
+
+
+def test_index_attachment_in_session_marks_error_and_reraises(
+    db_session, test_project, monkeypatch
+):
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    _bind_session(monkeypatch, db_session)
+
+    def _fail(_db, _att):
+        raise RAGServiceError("fallo de indexación")
+
+    monkeypatch.setattr(rag_service, "index_attachment", _fail)
+
+    with pytest.raises(RAGServiceError):
+        rag_service.index_attachment_in_session(attachment.id)
+
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "error"
+
+
+def test_index_attachment_background_swallows_and_marks_error(
+    db_session, test_project, monkeypatch
+):
+    monkeypatch.setenv("RAG_INDEXING_ENABLED", "true")
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    _bind_session(monkeypatch, db_session)
+
+    def _fail(_db, _att):
+        raise RAGServiceError("fallo de indexación")
+
+    monkeypatch.setattr(rag_service, "index_attachment", _fail)
+
+    rag_service.index_attachment_background(attachment.id)
+
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "error"
+
+
+def test_enqueue_failure_marks_error(db_session, test_project, monkeypatch):
+    monkeypatch.setenv("RAG_INDEXING_ENABLED", "true")
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    _bind_session(monkeypatch, db_session)
+
+    from app.tasks import rag_tasks
+
+    def _fail(_attachment_id):
+        raise RuntimeError("broker caído")
+
+    monkeypatch.setattr(rag_tasks.index_attachment_task, "delay", _fail)
+
+    assert rag_service.enqueue_attachment_indexing(attachment.id) is False
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "error"
+
+
+def test_enqueue_failure_does_not_override_indexed(
+    db_session, test_project, monkeypatch
+):
+    monkeypatch.setenv("RAG_INDEXING_ENABLED", "true")
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+    attachment.indexing_status = "indexed"
+    db_session.commit()
+    _bind_session(monkeypatch, db_session)
+
+    from app.tasks import rag_tasks
+
+    def _fail(_attachment_id):
+        raise RuntimeError("broker caído")
+
+    monkeypatch.setattr(rag_tasks.index_attachment_task, "delay", _fail)
+
+    assert rag_service.enqueue_attachment_indexing(attachment.id) is False
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "indexed"
+
+
+def test_enqueue_disabled_leaves_pending(db_session, test_project, monkeypatch):
+    monkeypatch.setenv("RAG_INDEXING_ENABLED", "false")
+    attachment = _make_attachment(db_session, project_id=test_project.id)
+
+    assert rag_service.enqueue_attachment_indexing(attachment.id) is False
+    db_session.refresh(attachment)
+    assert attachment.indexing_status == "pending"
+
+
 def test_extract_text_rejects_pdf_error_strings(db_session, test_project, monkeypatch):
     attachment = _make_attachment(
         db_session,

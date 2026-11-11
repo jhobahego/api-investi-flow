@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.attachment import FileType
+from app.models.attachment import FileType, IndexingStatus
 
 
 # Esquemas de entrada
@@ -87,6 +87,10 @@ class AttachmentResponse(AttachmentBase):
     project_id: Optional[int]
     phase_id: Optional[int]
     task_id: Optional[int]
+    indexing_status: IndexingStatus = Field(
+        IndexingStatus.PENDING,
+        description="Estado de indexación vectorial del documento",
+    )
     created_at: datetime
     updated_at: datetime
 
