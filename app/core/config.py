@@ -46,9 +46,15 @@ class Settings(BaseSettings):
     AI_MODEL_SUGGESTIONS: str = "gemini-2.5-flash-lite"
     AI_MODEL_CITATIONS: str = "gemini-2.5-flash-lite"
     AI_MODEL_BIBLIOGRAPHY: str = "gemini-3.1-pro-preview"
+    AI_MODEL_EMBEDDING: str = "gemini-embedding-001"
 
     # Redis
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
+
+    # Celery (RAG document indexing)
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
+    RAG_INDEXING_ENABLED: bool = True
 
     # Gemini cost guard (Phase 1, free Upstash Redis)
     RATE_LIMIT_REDIS_URL: Optional[str] = None

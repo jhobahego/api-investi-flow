@@ -12,6 +12,7 @@ from app.repositories.project_repository import ProjectRepository
 from app.repositories.task_repository import TaskRepository
 from app.schemas.attachment import AttachmentCreate, AttachmentUpdate
 from app.services.base import BaseService
+from app.services.rag_service import rag_service
 from app.utils.file_utils import FileUtils, FileValidationError
 
 logger = logging.getLogger(__name__)
@@ -118,6 +119,7 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             )
             db.commit()
             db.refresh(attachment)
+            rag_service.enqueue_attachment_text_indexing(attachment)
             return attachment
 
         except Exception:
@@ -348,6 +350,7 @@ class AttachmentService(BaseService[Attachment, AttachmentCreate, AttachmentUpda
             # No fallamos la petición si no se puede borrar el archivo anterior físico, pero lo logueamos.
             logger.warning(f"No se pudo eliminar el archivo anterior {old_file_path}")
 
+        rag_service.enqueue_attachment_text_indexing(existing_attachment)
         return existing_attachment
 
     def _validate_parent_entity(

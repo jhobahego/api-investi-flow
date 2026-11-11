@@ -66,6 +66,7 @@ openai==1.57.0
 packaging==25.0
 passlib==1.7.4
 pathspec==0.12.1
+pgvector>=0.2.4
 pillow==11.3.0
 platformdirs==4.4.0
 pluggy==1.6.0

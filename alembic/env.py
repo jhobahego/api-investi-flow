@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401
     Attachment,
     Bibliography,
     Conversation,
+    DocumentChunk,
     Message,
     Phase,
     Project,

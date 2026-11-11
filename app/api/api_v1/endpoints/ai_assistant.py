@@ -35,9 +35,8 @@ from app.schemas.conversation import (
     ConversationUpdate,
 )
 from app.services.ai_service import AIServiceError, ModelNotAvailableError, ai_service
-from app.services.attachment_service import attachment_service
-from app.services.document_extraction_service import document_extraction_service
 from app.services.project_service import project_service
+from app.services.rag_service import rag_service
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +131,28 @@ async def generate_suggestion(
                 description=request.project_info.description,
             )
 
+        # Recuperar fragmentos RAG solo si el proyecto pertenece al usuario
+        rag_context = None
+        if request.project_info and request.project_info.project_id:
+            try:
+                project_service.get_user_project_by_id(
+                    db,
+                    project_id=request.project_info.project_id,
+                    owner_id=current_user.id,  # type: ignore
+                )
+                rag_chunks = rag_service.retrieve_context(
+                    db,
+                    project_id=request.project_info.project_id,
+                    query=request.editor_state.text,
+                    top_k=5,
+                )
+                rag_context = rag_service.format_rag_context(rag_chunks)
+            except HTTPException:
+                # Sin acceso al proyecto: se omite el RAG sin romper la sugerencia.
+                rag_context = None
+            except Exception as e:
+                logger.warning(f"Error recuperando contexto RAG para sugerencia: {e}")
+
         # Extraer el contexto actual
         current_context_dict = (
             request.current_context.model_dump() if request.current_context else None
@@ -151,6 +172,7 @@ async def generate_suggestion(
             bibliography=bibliography_list,
             project_context=project_context_str,
             current_context=current_context_dict,
+            rag_context=rag_context,
             plan=user_plan,
         )
 
@@ -915,7 +937,6 @@ async def chat_with_persistent_history(  # noqa: C901
         ]
 
         # Variables para summaries
-        documents_contents = []
         bibliographies_summary = None
         fases_summary = None
         tareas_summary = None
@@ -923,25 +944,7 @@ async def chat_with_persistent_history(  # noqa: C901
         if request.project_context:
             ctx = request.project_context
 
-            # 1. Extraer Documentos Principales del Proyecto
-            if ctx.attachment_document:
-                for doc in ctx.attachment_document:
-                    if (
-                        isinstance(doc, dict)
-                        and doc.get("file_path")
-                        and str(doc["file_path"]).endswith((".docx", ".pdf"))
-                    ):
-                        try:
-                            content = document_extraction_service.get_document_preview(
-                                str(doc["file_path"]), max_chars=50000
-                            )
-                            documents_contents.append(
-                                f"Documento Base ({doc.get('file_name', 'Adjunto')}):\n{content}"
-                            )
-                        except Exception as e:
-                            logger.warning(f"Error extrayendo {doc['file_path']}: {e}")
-
-            # 2. Extraer Fases, Tareas y Documentos Asociados
+            # 1. Extraer Fases, Tareas y Documentos Asociados
             if ctx.fases:
                 fases_list = []
                 tareas_list = []
@@ -954,24 +957,6 @@ async def chat_with_persistent_history(  # noqa: C901
                     )
                     fases_list.append(f"{i + 1}. {phase_name}")
 
-                    # Documento de la fase
-                    p_doc = phase.get("attachment_document")
-                    if (
-                        p_doc
-                        and isinstance(p_doc, dict)
-                        and p_doc.get("file_path")
-                        and str(p_doc["file_path"]).endswith((".docx", ".pdf"))
-                    ):
-                        try:
-                            content = document_extraction_service.get_document_preview(
-                                str(p_doc["file_path"]), max_chars=25000
-                            )
-                            documents_contents.append(
-                                f"Documento de Fase '{phase_name}' ({p_doc.get('file_name', 'Adjunto')}):\n{content}"
-                            )
-                        except Exception as e:
-                            logger.warning(f"Error extrayendo doc de fase: {e}")
-
                     # Tareas de la fase
                     tasks = phase.get("tareas")
                     if isinstance(tasks, list):
@@ -983,26 +968,6 @@ async def chat_with_persistent_history(  # noqa: C901
                             tareas_list.append(
                                 f"- Fase '{phase_name}': {task_name} ({task_status})"
                             )
-
-                            # Documento de la tarea
-                            t_doc = t.get("attachment_document")
-                            if (
-                                t_doc
-                                and isinstance(t_doc, dict)
-                                and t_doc.get("file_path")
-                                and str(t_doc["file_path"]).endswith((".docx", ".pdf"))
-                            ):
-                                try:
-                                    content = document_extraction_service.get_document_preview(
-                                        str(t_doc["file_path"]), max_chars=15000
-                                    )
-                                    documents_contents.append(
-                                        f"Documento de Tarea '{task_name}' ({t_doc.get('file_name', 'Adjunto')}):\n{content}"
-                                    )
-                                except Exception as e:
-                                    logger.warning(
-                                        f"Error extrayendo doc de tarea: {e}"
-                                    )
 
                 if fases_list:
                     fases_summary = "\n".join(fases_list)
@@ -1028,7 +993,7 @@ async def chat_with_persistent_history(  # noqa: C901
                 except Exception as e:
                     logger.warning(f"Error al formatear bibliografía del request: {e}")
 
-        # 4. Fallbacks a la Base de Datos si no vienen datos en el contexto
+        # 3. Fallbacks a la Base de Datos si no vienen datos en el contexto
         if not fases_summary and project_id:
             try:
                 db_phases = phase_repository.get_phases_by_project(
@@ -1040,32 +1005,6 @@ async def chat_with_persistent_history(  # noqa: C901
                     for i, phase in enumerate(db_phases):
                         phase_name = phase.name or f"Fase {i + 1}"
                         fases_list.append(f"{i + 1}. {phase_name}")
-
-                        # Phase document
-                        p_attach = attachment_service.get_attachment_by_parent(
-                            db,
-                            parent_type="phase",
-                            parent_id=phase.id,
-                            user_id=current_user.id,
-                        )
-                        if (
-                            p_attach
-                            and p_attach.file_path
-                            and str(p_attach.file_path).endswith((".docx", ".pdf"))
-                        ):
-                            try:
-                                content = (
-                                    document_extraction_service.get_document_preview(
-                                        str(p_attach.file_path), max_chars=25000
-                                    )
-                                )
-                                documents_contents.append(
-                                    f"Documento de Fase '{phase_name}' ({p_attach.file_name}):\n{content}"
-                                )
-                            except Exception as e:
-                                logger.warning(
-                                    f"Error extrayendo doc de fase desde DB: {e}"
-                                )
 
                         # Tasks
                         db_tasks = task_repository.get_tasks_by_phase(
@@ -1079,32 +1018,6 @@ async def chat_with_persistent_history(  # noqa: C901
                                     f"- Fase '{phase_name}': {task_name} ({task_status})"
                                 )
 
-                                # Task document
-                                t_attach = attachment_service.get_attachment_by_parent(
-                                    db,
-                                    parent_type="task",
-                                    parent_id=t.id,
-                                    user_id=current_user.id,
-                                )
-                                if (
-                                    t_attach
-                                    and t_attach.file_path
-                                    and str(t_attach.file_path).endswith(
-                                        (".docx", ".pdf")
-                                    )
-                                ):
-                                    try:
-                                        content = document_extraction_service.get_document_preview(
-                                            str(t_attach.file_path), max_chars=15000
-                                        )
-                                        documents_contents.append(
-                                            f"Documento de Tarea '{task_name}' ({t_attach.file_name}):\n{content}"
-                                        )
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"Error extrayendo doc de tarea desde DB: {e}"
-                                        )
-
                     if fases_list:
                         fases_summary = "\n".join(fases_list)
                     if tareas_list:
@@ -1112,31 +1025,15 @@ async def chat_with_persistent_history(  # noqa: C901
             except Exception as e:
                 logger.warning(f"Error recuperando fases y tareas desde DB: {e}")
 
-        if not documents_contents:
-            try:
-                attachment = attachment_service.get_attachment_by_parent(
-                    db,
-                    parent_type="project",
-                    parent_id=project_id,
-                    user_id=current_user.id,
-                )
-                if (
-                    attachment
-                    and attachment.file_path
-                    and str(attachment.file_path).endswith((".docx", ".pdf"))
-                ):
-                    content = document_extraction_service.get_document_preview(
-                        str(attachment.file_path), max_chars=50000
-                    )
-                    documents_contents.append(f"Documento Base Principal:\n{content}")
-            except Exception as e:
-                logger.warning(
-                    f"Error al obtener contenido del documento para chat: {e}"
-                )
-
-        document_content_summary = (
-            "\n\n".join(documents_contents) if documents_contents else None
-        )
+        # 4. Recuperar fragmentos relevantes del documento (RAG)
+        rag_context = None
+        try:
+            rag_chunks = rag_service.retrieve_context(
+                db, project_id=project_id, query=request.message, top_k=5
+            )
+            rag_context = rag_service.format_rag_context(rag_chunks)
+        except Exception as e:
+            logger.warning(f"Error recuperando contexto RAG para chat: {e}")
 
         if not bibliographies_summary:
             try:
@@ -1162,7 +1059,6 @@ async def chat_with_persistent_history(  # noqa: C901
             project_name=project.name,  # type: ignore
             description=project.description,  # type: ignore
             research_type=project.research_type,  # type: ignore
-            documents_summary=document_content_summary,
             bibliographies_summary=bibliographies_summary,
             fases_summary=fases_summary,
             tareas_summary=tareas_summary,
@@ -1173,6 +1069,7 @@ async def chat_with_persistent_history(  # noqa: C901
             message=request.message,
             history=history_for_ai,
             project_context=project_context,
+            rag_context=rag_context,
             plan=user_plan,
         )
 

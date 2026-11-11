@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.gemini_guard import (
     BIBLIOGRAPHY_CONTEXT_MAX_CHARS,
     CHAT_CONTEXT_MAX_CHARS,
+    RAG_CONTEXT_MAX_CHARS,
     SUGGESTION_DOC_MAX_CHARS,
     truncate_context,
 )
@@ -188,6 +189,7 @@ class AIService:
         message: str,
         history: list[dict[str, str]],
         project_context: str | None = None,
+        rag_context: str | None = None,
         plan: UserPlan = UserPlan.PROFESIONAL,
     ) -> tuple[str, str]:
         """
@@ -197,6 +199,7 @@ class AIService:
             message: El mensaje del usuario
             history: Historial de mensajes previos
             project_context: Contexto del proyecto formateado
+            rag_context: Fragmentos recuperados del documento (RAG)
             plan: Plan del usuario (por defecto PROFESIONAL)
 
         Returns:
@@ -211,11 +214,13 @@ class AIService:
             # Server-side truncation (cost guard): context never exceeds
             # CHAT_CONTEXT_MAX_CHARS before calling Gemini.
             project_context = truncate_context(project_context, CHAT_CONTEXT_MAX_CHARS)
+            rag_context = truncate_context(rag_context, RAG_CONTEXT_MAX_CHARS)
 
             # Formatear el prompt del sistema con el contexto del proyecto
             system_prompt = CHAT_SYSTEM_PROMPT.format(
                 project_context=project_context
-                or "No hay información específica del proyecto disponible."
+                or "No hay información específica del proyecto disponible.",
+                rag_context=rag_context or "No hay fragmentos recuperados.",
             )
 
             # Construir el contenido con historial y mensaje actual
@@ -263,6 +268,7 @@ class AIService:
         bibliography: list[dict] | None = None,
         project_context: str | None = None,
         current_context: dict | None = None,
+        rag_context: str | None = None,
         plan: UserPlan = UserPlan.ESTUDIANTE,
     ) -> tuple[str, str]:
         """
@@ -274,6 +280,7 @@ class AIService:
             bibliography: Lista de referencias bibliográficas del proyecto
             project_context: Contexto del proyecto formateado
             current_context: Contexto jerárquico (fase, tarea actual)
+            rag_context: Fragmentos recuperados del documento (RAG)
             plan: Plan del usuario (por defecto ESTUDIANTE)
 
         Returns:
@@ -295,6 +302,7 @@ class AIService:
             document_content = (
                 truncate_context(document_content, SUGGESTION_DOC_MAX_CHARS) or ""
             )
+            rag_context = truncate_context(rag_context, RAG_CONTEXT_MAX_CHARS)
 
             # Formatear contextos
             project_ctx = project_context or "Proyecto sin información específica"
@@ -305,6 +313,7 @@ class AIService:
             # Construir el prompt con todos los contextos
             prompt = SUGGESTIONS_SYSTEM_PROMPT.format(
                 project_context=project_ctx,
+                rag_context=rag_context or "No hay fragmentos recuperados.",
                 hierarchical_context=hierarchical_ctx,
                 bibliography_context=bibliography_ctx,
                 document_content=document_ctx,

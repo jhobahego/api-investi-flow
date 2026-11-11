@@ -12,6 +12,10 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - ENVIRONMENT=development
       - DEBUG=True
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RAG_INDEXING_ENABLED=true
+      - RATE_LIMIT_REDIS_URL=async+redis://redis:6379
     env_file:
       - .env
     depends_on:
@@ -19,9 +23,27 @@ services:
       - redis
     command: sh -c "sleep 10 && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
-  # Base de datos PostgreSQL
+  # Celery worker for RAG document indexing
+  worker:
+    build: .
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+    environment:
+      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@db:5432/${DATABASE_NAME}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RAG_INDEXING_ENABLED=true
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag
+
+  # Base de datos PostgreSQL con extension pgvector (RAG document_chunks)
   db:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     ports:
       - "5432:5432"
     volumes:

@@ -3,7 +3,7 @@ Endpoints para extracción y gestión de contenido de documentos
 """
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
@@ -17,6 +17,7 @@ from app.schemas.document import (
 )
 from app.services.document_extraction_service import document_extraction_service
 from app.services.document_generation_service import document_generation_service
+from app.services.rag_service import rag_service
 
 router = APIRouter(prefix="/documentos", tags=["documentos"])
 
@@ -297,4 +298,31 @@ async def update_document_content(
         attachment.file_size = os.path.getsize(file_path)
 
     db.commit()
+
+    rag_service.enqueue_attachment_text_indexing(attachment)
+
     return {"message": "Documento actualizado exitosamente"}
+
+
+@router.get("/{attachment_id}/search")
+async def search_document_content(
+    attachment_id: int,
+    q: str,
+    top_k: int = Query(default=5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Búsqueda semántica sobre los fragmentos indexados de un documento.
+
+    La validación de pertenencia al proyecto se realiza dentro del servicio RAG,
+    por lo que un usuario sin acceso recibe 403 y un documento inexistente 404.
+    """
+    results = rag_service.retrieve_for_attachment(
+        db,
+        attachment_id=attachment_id,
+        user_id=current_user.id,  # type: ignore
+        query=q,
+        top_k=top_k,
+    )
+    return {"attachment_id": attachment_id, "query": q, "results": results}
