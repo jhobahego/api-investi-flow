@@ -126,6 +126,26 @@ class TestAttachmentEndpoints:
         assert "file_size" in data
         assert "id" in data
 
+    def test_upload_document_returns_pending_indexing_status(self):
+        """La subida expone el estado de indexación (pending si no se encola)"""
+        headers, user_id = self.create_test_user_and_login()
+        project = self.create_test_project(headers)
+
+        file_data = self.create_test_pdf_file("status_document.pdf")
+
+        with patch(
+            "app.services.rag_service.rag_service.enqueue_attachment_text_indexing",
+            return_value=False,
+        ):
+            response = client.post(
+                f"/api/v1/proyectos/{project['id']}/documentos",
+                headers=headers,
+                files={"file": file_data},
+            )
+
+        assert response.status_code == 201
+        assert response.json()["indexing_status"] == "pending"
+
     def test_upload_document_to_project_success_docx(self):
         """Probar subida exitosa de DOCX a proyecto"""
         headers, user_id = self.create_test_user_and_login()

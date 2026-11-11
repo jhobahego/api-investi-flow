@@ -5,11 +5,21 @@ Schemas para conversaciones y mensajes de chat
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # =============================================================================
 # SCHEMAS PARA MENSAJES
 # =============================================================================
+
+
+class ChatSource(BaseModel):
+    """Fuente RAG citada en una respuesta del asistente"""
+
+    attachment_id: int
+    file_name: str
+    chunk_index: int
+    snippet: str = Field(..., max_length=300)
+    similarity: float
 
 
 class MessageBase(BaseModel):
@@ -33,9 +43,20 @@ class MessageResponse(MessageBase):
     model_used: str | None = Field(
         None, description="Modelo de IA utilizado (solo para mensajes del asistente)"
     )
+    sources: list[ChatSource] = Field(
+        default_factory=list,
+        description="Fuentes RAG citadas en la respuesta (vacío si no hubo RAG)",
+    )
     created_at: datetime
 
     model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    @field_validator("sources", mode="before")
+    @classmethod
+    def _none_sources_to_empty(cls, value: Any) -> Any:
+        if value is None:
+            return []
+        return value
 
 
 # =============================================================================
@@ -140,5 +161,9 @@ class ChatWithHistoryResponse(BaseModel):
     model_used: str = Field(..., description="Modelo de IA utilizado")
     conversation_id: int = Field(..., description="ID de la conversación")
     message_id: int = Field(..., description="ID del mensaje de respuesta")
+    sources: list[ChatSource] = Field(
+        default_factory=list,
+        description="Fuentes RAG citadas en la respuesta (vacío si no hubo RAG)",
+    )
 
     model_config = {"protected_namespaces": ()}

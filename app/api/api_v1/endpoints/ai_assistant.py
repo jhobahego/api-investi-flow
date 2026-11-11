@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -28,6 +29,7 @@ from app.schemas.ai import (
     SuggestionResponse,
 )
 from app.schemas.conversation import (
+    ChatSource,
     ChatWithHistoryRequest,
     ChatWithHistoryResponse,
     ConversationListResponse,
@@ -868,6 +870,7 @@ async def chat_with_persistent_history(  # noqa: C901
     """
     Chat con el asistente IA con historial persistente.
     """
+    rag_chunks: list[dict[str, Any]] = []
     try:
         logger.info(
             f"Usuario {current_user.email} envía mensaje en proyecto {project_id}"
@@ -1035,6 +1038,22 @@ async def chat_with_persistent_history(  # noqa: C901
         except Exception as e:
             logger.warning(f"Error recuperando contexto RAG para chat: {e}")
 
+        # Construir las fuentes citables a partir de los fragmentos recuperados
+        sources: list[dict[str, Any]] = []
+        for chunk in rag_chunks:
+            if not isinstance(chunk, dict):
+                continue
+            snippet = (chunk.get("content") or "").strip()[:300]
+            sources.append(
+                {
+                    "attachment_id": chunk.get("attachment_id"),
+                    "file_name": chunk.get("file_name") or "documento",
+                    "chunk_index": chunk.get("chunk_index", 0),
+                    "snippet": snippet,
+                    "similarity": float(chunk.get("similarity", 0.0)),
+                }
+            )
+
         if not bibliographies_summary:
             try:
                 bibliographies = bibliography_repository.get_by_project(
@@ -1080,6 +1099,7 @@ async def chat_with_persistent_history(  # noqa: C901
             role="model",
             content=response_text,
             model_used=model_used,
+            sources=sources or None,
         )
 
         # Generar título para conversaciones nuevas si no se proporcionó uno
@@ -1110,6 +1130,7 @@ async def chat_with_persistent_history(  # noqa: C901
             model_used=model_used,
             conversation_id=conversation.id,
             message_id=assistant_message.id,
+            sources=[ChatSource(**source) for source in sources],
         )
 
     except HTTPException:

@@ -2,7 +2,7 @@
 Repositorio para gestión de conversaciones y mensajes de chat
 """
 import logging
-from typing import Sequence
+from typing import Any, Sequence
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session, joinedload
@@ -188,6 +188,7 @@ class MessageRepository:
         role: str,
         content: str,
         model_used: str | None = None,
+        sources: list[dict[str, Any]] | None = None,
     ) -> Message:
         """
         Crea un nuevo mensaje en una conversación.
@@ -198,6 +199,7 @@ class MessageRepository:
             role: Rol del mensaje ('user' o 'model')
             content: Contenido del mensaje
             model_used: Modelo de IA utilizado (solo para mensajes del asistente)
+            sources: Fuentes RAG citadas (solo para mensajes del asistente)
 
         Returns:
             Mensaje creado
@@ -207,6 +209,7 @@ class MessageRepository:
             role=role,
             content=content,
             model_used=model_used,
+            sources=sources,
         )
         db.add(message)
         db.commit()

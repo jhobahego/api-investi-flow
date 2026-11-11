@@ -606,6 +606,93 @@ class TestConversations:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+class TestChatSources:
+    """Tests para las fuentes RAG devueltas por el chat"""
+
+    @patch("app.services.ai_service.ai_service.chat")
+    @patch("app.services.rag_service.rag_service.retrieve_context")
+    def test_chat_returns_sources_and_persists_them(self, mock_retrieve, mock_chat):
+        """El chat devuelve fuentes y las persiste en el historial"""
+        headers, _ = create_test_user_and_login()
+        project_id = create_test_project(headers)
+
+        mock_chat.return_value = ("Respuesta con fuentes", "gemini-1.5-pro")
+        mock_retrieve.return_value = [
+            {
+                "attachment_id": 42,
+                "file_name": "tesis.docx",
+                "chunk_index": 3,
+                "content": "Contenido relevante " * 30,
+                "similarity": 0.87,
+            }
+        ]
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/chat",
+            json={"message": "¿Qué dice la tesis?", "title": "Con fuentes"},
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["sources"]) == 1
+        source = data["sources"][0]
+        assert set(source) == {
+            "attachment_id",
+            "file_name",
+            "chunk_index",
+            "snippet",
+            "similarity",
+        }
+        assert source["attachment_id"] == 42
+        assert source["file_name"] == "tesis.docx"
+        assert source["chunk_index"] == 3
+        assert len(source["snippet"]) <= 300
+        assert source["similarity"] == pytest.approx(0.87)
+
+        conversation_id = data["conversation_id"]
+        history = client.get(
+            f"/api/v1/proyectos/{project_id}/conversaciones/{conversation_id}",
+            headers=headers,
+        )
+        assert history.status_code == status.HTTP_200_OK
+        messages = history.json()["messages"]
+        assistant_messages = [msg for msg in messages if msg["role"] == "model"]
+        user_messages = [msg for msg in messages if msg["role"] == "user"]
+        assert len(assistant_messages) == 1
+        assert assistant_messages[0]["sources"][0]["attachment_id"] == 42
+        assert assistant_messages[0]["sources"][0]["snippet"]
+        assert user_messages[0]["sources"] == []
+
+    @patch("app.services.ai_service.ai_service.chat")
+    @patch("app.services.rag_service.rag_service.retrieve_context")
+    def test_chat_returns_empty_sources_without_context(self, mock_retrieve, mock_chat):
+        """Sin contexto RAG el chat devuelve una lista vacía de fuentes"""
+        headers, _ = create_test_user_and_login()
+        project_id = create_test_project(headers)
+
+        mock_chat.return_value = ("Respuesta sin fuentes", "gemini-1.5-pro")
+        mock_retrieve.return_value = []
+
+        response = client.post(
+            f"/api/v1/proyectos/{project_id}/chat",
+            json={"message": "Hola", "title": "Sin fuentes"},
+            headers=headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["sources"] == []
+
+
+def test_openapi_exposes_sources_and_indexing_status():
+    """El contrato OpenAPI debe exponer los nuevos campos."""
+    from main import app
+
+    schemas = app.openapi()["components"]["schemas"]
+    assert "sources" in schemas["ChatWithHistoryResponse"]["properties"]
+    assert "indexing_status" in schemas["AttachmentResponse"]["properties"]
+
+
 class TestCostGuard:
     """Cost guard tests on endpoints (with mocks, no real Redis)"""
 

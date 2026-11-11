@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.gemini_guard import truncate_context
 from app.database import SessionLocal
-from app.models.attachment import Attachment, FileType
+from app.models.attachment import Attachment, FileType, IndexingStatus
 from app.models.document_chunk import EMBEDDING_DIMENSION, DocumentChunk, EmbeddingType
 from app.models.phase import Phase
 from app.models.project import Project
@@ -343,6 +343,41 @@ class RAGService:
         db.commit()
         return len(rows)
 
+    def _set_indexing_status(
+        self, db: Session, attachment_id: int, status: IndexingStatus
+    ) -> None:
+        """Persist the indexing status of an attachment; no-op if missing."""
+        attachment = db.get(Attachment, attachment_id)
+        if attachment is None:
+            return
+        attachment.indexing_status = status.value
+        db.commit()
+
+    def _mark_indexing_error_best_effort(self, attachment_id: int) -> None:
+        """Best-effort ERROR marking: never raises, never overrides INDEXED."""
+        db = SessionLocal()
+        try:
+            attachment = db.get(Attachment, attachment_id)
+            if attachment is None:
+                return
+            if attachment.indexing_status == IndexingStatus.INDEXED.value:
+                return
+            self._set_indexing_status(db, attachment_id, IndexingStatus.ERROR)
+        except Exception:
+            logger.exception(
+                "No se pudo marcar el adjunto %s como error de indexación",
+                attachment_id,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+
     def index_attachment_in_session(self, attachment_id: int) -> int:
         """Celery entry point: index in a fresh session and re-raise failures."""
         db = SessionLocal()
@@ -350,9 +385,23 @@ class RAGService:
             attachment = db.get(Attachment, attachment_id)
             if attachment is None:
                 return 0
-            return self.index_attachment(db, attachment)
+            self._set_indexing_status(db, attachment_id, IndexingStatus.INDEXING)
+            count = self.index_attachment(db, attachment)
+            self._set_indexing_status(
+                db,
+                attachment_id,
+                IndexingStatus.INDEXED if count > 0 else IndexingStatus.ERROR,
+            )
+            return count
         except Exception:
             db.rollback()
+            try:
+                self._set_indexing_status(db, attachment_id, IndexingStatus.ERROR)
+            except Exception:
+                logger.exception(
+                    "No se pudo marcar el adjunto %s como error de indexación",
+                    attachment_id,
+                )
             raise
         finally:
             db.close()
@@ -364,9 +413,23 @@ class RAGService:
             attachment = db.get(Attachment, attachment_id)
             if attachment is None:
                 return 0
-            return self.index_attachment_text(db, attachment, text)
+            self._set_indexing_status(db, attachment_id, IndexingStatus.INDEXING)
+            count = self.index_attachment_text(db, attachment, text)
+            self._set_indexing_status(
+                db,
+                attachment_id,
+                IndexingStatus.INDEXED if count > 0 else IndexingStatus.ERROR,
+            )
+            return count
         except Exception:
             db.rollback()
+            try:
+                self._set_indexing_status(db, attachment_id, IndexingStatus.ERROR)
+            except Exception:
+                logger.exception(
+                    "No se pudo marcar el adjunto %s como error de indexación",
+                    attachment_id,
+                )
             raise
         finally:
             db.close()
@@ -384,6 +447,7 @@ class RAGService:
             logger.exception(
                 "No se pudo encolar el indexado RAG del adjunto %s", attachment_id
             )
+            self._mark_indexing_error_best_effort(attachment_id)
             return False
 
     def enqueue_attachment_text_indexing(self, attachment: Attachment) -> bool:
@@ -434,9 +498,22 @@ class RAGService:
             attachment = db.get(Attachment, attachment_id)
             if attachment is None:
                 return
-            self.index_attachment(db, attachment)
+            self._set_indexing_status(db, attachment_id, IndexingStatus.INDEXING)
+            count = self.index_attachment(db, attachment)
+            self._set_indexing_status(
+                db,
+                attachment_id,
+                IndexingStatus.INDEXED if count > 0 else IndexingStatus.ERROR,
+            )
         except Exception:
             db.rollback()
+            try:
+                self._set_indexing_status(db, attachment_id, IndexingStatus.ERROR)
+            except Exception:
+                logger.exception(
+                    "No se pudo marcar el adjunto %s como error de indexación",
+                    attachment_id,
+                )
             logger.exception("Error indexando adjunto %s en background", attachment_id)
         finally:
             db.close()

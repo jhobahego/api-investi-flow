@@ -22,6 +22,15 @@ class FileType(str, Enum):
     DOCX = "docx"
 
 
+class IndexingStatus(str, Enum):
+    """Estados del indexado vectorial de un adjunto"""
+
+    PENDING = "pending"
+    INDEXING = "indexing"
+    INDEXED = "indexed"
+    ERROR = "error"
+
+
 class Attachment(Base):
     __tablename__ = "attachments"
 
@@ -30,6 +39,12 @@ class Attachment(Base):
     file_path: Mapped[str] = mapped_column(String(512), nullable=False)
     file_type: Mapped[FileType] = mapped_column(SqlEnum(FileType), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)  # Tamaño en bytes
+    indexing_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=IndexingStatus.PENDING.value,
+        server_default=IndexingStatus.PENDING.value,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -68,5 +83,9 @@ class Attachment(Base):
             "(project_id IS NULL AND phase_id IS NOT NULL AND task_id IS NULL) OR "
             "(project_id IS NULL AND phase_id IS NULL AND task_id IS NOT NULL)",
             name="ck_attachment_parent_exclusive",
+        ),
+        CheckConstraint(
+            "indexing_status IN ('pending','indexing','indexed','error')",
+            name="ck_attachments_indexing_status",
         ),
     )
