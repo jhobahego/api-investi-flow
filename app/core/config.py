@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     # Celery (RAG document indexing)
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
+    CELERY_QUEUE_NAME: str = "rag"
     RAG_INDEXING_ENABLED: bool = True
 
     # Gemini cost guard (Phase 1, free Upstash Redis)

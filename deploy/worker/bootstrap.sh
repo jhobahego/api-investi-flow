@@ -10,16 +10,23 @@
 #
 # Environment inputs:
 #   REPO_URL  (default: https://github.com/jhobahego/api-investi-flow.git)
-#   BRANCH    (default: feat/rag-documents-backend)
+#   BRANCH    (default: develop; use main for production)
 #   APP_DIR   (default: /opt/investi-flow)
-#   ENV_B64   (base64 of the worker env file; written to $APP_DIR/.env.staging-worker)
+#   WORKER_ENV_FILE (default: $APP_DIR/.env.staging-worker)
+#   COMPOSE_PROJECT_NAME (default: basename of $APP_DIR)
+#   ENV_B64   (base64 of the worker env file; written to $WORKER_ENV_FILE)
+#
+# Production example:
+#   BRANCH=main APP_DIR=/opt/investi-flow-production WORKER_ENV_FILE=/opt/investi-flow-production/.env.production-worker COMPOSE_PROJECT_NAME=investi-flow-production
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/jhobahego/api-investi-flow.git}"
-BRANCH="${BRANCH:-feat/rag-documents-backend}"
+BRANCH="${BRANCH:-develop}"
 APP_DIR="${APP_DIR:-/opt/investi-flow}"
 COMPOSE="$APP_DIR/deploy/worker/docker-compose.yml"
-ENV_FILE="$APP_DIR/.env.staging-worker"
+WORKER_ENV_FILE="${WORKER_ENV_FILE:-$APP_DIR/.env.staging-worker}"
+ENV_FILE="$WORKER_ENV_FILE"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$APP_DIR")}"
 
 log() { echo "[bootstrap] $*"; }
 
@@ -52,10 +59,10 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: investi-flow-worker:local
+    image: investi-flow-worker:fallback
     env_file:
       - ../../.env.staging-worker
-    command: celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag
+    command: sh -c "celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=1 -Q $${CELERY_QUEUE_NAME:-rag}"
     restart: unless-stopped
 YAML
 fi
@@ -70,8 +77,8 @@ fi
 # 5) Build and start.
 cd "$APP_DIR"
 log "building image"
-docker compose -f "$COMPOSE" build
+docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE" build
 log "starting worker"
-docker compose -f "$COMPOSE" up -d
-docker compose -f "$COMPOSE" ps
+docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE" up -d
+docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE" ps
 log "READY"

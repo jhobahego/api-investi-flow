@@ -14,6 +14,7 @@ services:
       - DEBUG=True
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_QUEUE_NAME=${CELERY_QUEUE_NAME:-rag}
       - RAG_INDEXING_ENABLED=true
       - RATE_LIMIT_REDIS_URL=async+redis://redis:6379
     env_file:
@@ -33,13 +34,14 @@ services:
       - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@db:5432/${DATABASE_NAME}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_QUEUE_NAME=${CELERY_QUEUE_NAME:-rag}
       - RAG_INDEXING_ENABLED=true
     env_file:
       - .env
     depends_on:
       - db
       - redis
-    command: celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag
+    command: sh -c "celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q $${CELERY_QUEUE_NAME:-rag}"
 
   # Base de datos PostgreSQL con extension pgvector (RAG document_chunks)
   db:

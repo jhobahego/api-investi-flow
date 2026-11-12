@@ -1,0 +1,21 @@
+# Provider-neutral Celery worker definition for production.
+# Only two host inputs are required: a Docker daemon and an environment file
+# with production secrets. Nothing here references a cloud provider.
+#
+# Run from the repository root:
+#   docker compose -f deploy/worker/docker-compose.production.yml up -d
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: investi-flow-worker:production
+    env_file:
+      - ../../.env.production-worker
+    command: sh -c "celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=1 -Q $${CELERY_QUEUE_NAME:-rag}"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

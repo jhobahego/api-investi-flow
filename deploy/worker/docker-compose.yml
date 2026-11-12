@@ -9,10 +9,10 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: investi-flow-worker:local
+    image: investi-flow-worker:staging
     env_file:
       - ../../.env.staging-worker
-    command: celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q rag
+    command: sh -c "celery -A app.core.celery_app.celery_app worker --loglevel=info --concurrency=1 -Q $${CELERY_QUEUE_NAME:-rag}"
     restart: unless-stopped
     logging:
       driver: json-file
